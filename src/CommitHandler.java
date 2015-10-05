@@ -10,7 +10,7 @@ public class CommitHandler {
 	 */
 	private enum State 
 	{
-		ABORTED, UNCERTAIN, COMMITTABLE, COMMITTED
+		NONE, ABORTED, UNCERTAIN, COMMITTABLE, COMMITTED
 	}
 	
 	/**
@@ -32,11 +32,18 @@ public class CommitHandler {
 		
 		switch (transactionState)
 		{
+			case NONE:
+				if (action instanceof Start3PC)
+				{
+					vote();
+				}
+				break;
 			case ABORTED:
 				if (action instanceof Start3PC)
 				{
 					vote();
 				}
+				break;
 			case UNCERTAIN:
 				break;
 			case COMMITTABLE:
@@ -47,6 +54,11 @@ public class CommitHandler {
 	}
 	
 	private void vote()
+	{
+		
+	}
+	
+	private void abort()
 	{
 		
 	}
