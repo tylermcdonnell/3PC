@@ -21,8 +21,9 @@ public class Commit extends Action implements Serializable {
 		return "COMMIT: " + this.message;
 	}
 
-	public Commit(String message)
+	public Commit(Integer id, String message)
 	{
+		super(id);
 		this.message = message;
 	}
 

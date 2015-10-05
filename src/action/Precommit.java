@@ -4,7 +4,6 @@ import java.io.Serializable;
 
 /**
  * Abstraction for the PRECOMMIT message used in the 3PC protocol.
- * @author tyler
  *
  */
 public class Precommit extends Action implements Serializable {
@@ -19,8 +18,9 @@ public class Precommit extends Action implements Serializable {
 	/**
 	 * Default constructor
 	 */
-	public Precommit(String message)
+	public Precommit(Integer id, String message)
 	{
+		super(id);
 		this.message = message;
 	}
 
