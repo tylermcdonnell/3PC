@@ -15,7 +15,7 @@ public class Playlist {
 
 	// Each song hashes to its URL. This embodies the entire contents
 	// of a playlist.
-	HashMap<String, String> playlistMap;
+	private HashMap<String, String> playlistMap;
 	
 	/**
 	 * Default constructor.
@@ -92,6 +92,28 @@ public class Playlist {
 		this.playlistMap.remove(songName);
 		
 		// Add a new key, value pair.
-		this.playlistMap.put(newSongName, newSongURL);
+		this.add(newSongName, newSongURL);
+	}
+	
+	
+	/**
+	 * Return this playlist.
+	 * @return this playlist.
+	 */
+	public HashMap<String, String> getPlaylist() {
+		
+		return this.playlistMap;
+	}
+	
+	/**
+	 * Prints this playlist to stdout.
+	 */
+	public void printPlaylist() {
+		
+		System.out.println("PLAYLIST:");
+		
+		for (String key : this.playlistMap.keySet()) {
+		    System.out.println(key + ", " + this.playlistMap.get(key));
+		}
 	}
 }
