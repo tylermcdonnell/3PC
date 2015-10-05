@@ -1,3 +1,4 @@
+import java.util.Scanner;
 
 public class Launcher {
 
@@ -9,6 +10,13 @@ public class Launcher {
 		// commands.
 		
 		System.out.println("Hello world!");
+		
+		Scanner scanner = new Scanner(System.in);
+		while(true)
+		{
+			String command = scanner.next();
+			System.out.println(command);
+		}
 	}
 }
 
