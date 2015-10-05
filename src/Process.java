@@ -33,6 +33,10 @@ public class Process {
 	 */
 	private boolean voteYes = true;
 	
+	
+	// CHANGE
+	private Integer myID = 0;
+	
 	public Process(String logName)
 	{
 		dtLog = new TransactionLog(true, logName);
@@ -44,10 +48,10 @@ public class Process {
 	 */
 	public void handle(Integer sender, Action action)
 	{
-		State state = transactions.get(action.id);
+		State state = transactions.get(action.transactionID);
 		if(state == null)
 		{
-			state = setState(action.id, State.Aborted);
+			state = setState(action.transactionID, State.Aborted);
 		}
 		
 		if (action instanceof Start3PC)
@@ -100,7 +104,7 @@ public class Process {
 	private void voteYes(Start3PC start3PC)
 	{
 		// Log YES
-		dtLog.log(new Yes(start3PC.id, "", start3PC.getParticipants()));
+		dtLog.log(new Yes(start3PC.transactionID, myID, "", start3PC.getParticipants()));
 		
 		// Send YES to coordinator
 	}
@@ -108,13 +112,13 @@ public class Process {
 	private void voteNo(Start3PC start3PC)
 	{
 		// Log ABORT
-		abort(start3PC.id);
+		abort(start3PC.transactionID);
 		
 		// Send NO to coordinator
 	}
 	
 	private void abort(Integer id)
 	{
-		dtLog.log(new Abort(id, ""));
+		dtLog.log(new Abort(id, myID, ""));
 	}
 }
