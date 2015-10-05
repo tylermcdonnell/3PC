@@ -24,9 +24,9 @@ public class Start3PC extends Action implements Serializable {
 	 */
 	private String message;
 	
-	public Start3PC(Integer id, String message, Collection<Integer> participants)
+	public Start3PC(Integer transactionID, Integer senderID, String message, Collection<Integer> participants)
 	{
-		super(id);
+		super(transactionID, senderID);
 		this.participants = new ArrayList<Integer>(participants);
 		this.message = message;
 	}

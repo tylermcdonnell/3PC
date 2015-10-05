@@ -2,10 +2,18 @@ package action;
 
 public class Action {
 
-	public Integer id;
+	// Who is sending this action.
+	public int senderID;
 	
-	public Action(Integer id)
+	// Each music action (add, edit, remove) has a transaction ID associated
+	// with it.  Each message in the entire run of the 3PC protocol associated
+	// with this music action will include this ID in all of the messages passed
+	// back and forth.
+	public Integer transactionID;
+	
+	
+	public Action(Integer transID, int senderID)
 	{
-		this.id = id;
+		this.transactionID = transID;
 	}
 }

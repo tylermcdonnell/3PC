@@ -18,9 +18,9 @@ public class Precommit extends Action implements Serializable {
 	/**
 	 * Default constructor
 	 */
-	public Precommit(Integer id, String message)
+	public Precommit(Integer transactionID, Integer senderID, String message)
 	{
-		super(id);
+		super(transactionID, senderID);
 		this.message = message;
 	}
 
