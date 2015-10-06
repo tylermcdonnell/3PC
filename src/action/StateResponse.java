@@ -42,5 +42,4 @@ public class StateResponse extends Action implements Serializable {
 	{
 		return this.role;
 	}
-
 }

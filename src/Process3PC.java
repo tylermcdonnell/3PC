@@ -27,24 +27,6 @@ public class Process3PC implements Runnable {
 		}
 	}
 	
-	// Possible 3PC roles.
-	// Coordinator: Process "coordinating" the 3PC protocol.
-	// Participant: Process voting in 3PC protocol.
-	public enum Role
-	{
-		Coordinator, Participant;
-	}
-	
-	// Possible 3PC states.
-	// Aborted: 	The process has not voted, has voted NO, or has received an ABORT.
-	// Uncertain:	The process has voted YES but not received a PRECOMMIT or ABORT.
-	// Committable:	The process has received PRECOMMIT, but has not received COMMIT.
-	// Committed:	The process has received and decided to COMMIT. 
-	public enum State 
-	{
-		Aborted, Uncertain, Committable, Committed
-	}
-	
 	// Possible vote decisions.
 	private enum Decide
 	{
@@ -243,7 +225,7 @@ public class Process3PC implements Runnable {
 		{
 			if (action instanceof Precommit)
 			{
-				updateState(transaction.id, ThreePC.State.Committable);
+				precommit((Precommit)action);
 			}
 			else if (action instanceof Abort)
 			{
@@ -264,7 +246,7 @@ public class Process3PC implements Runnable {
 		
 		if (action instanceof StateRequest)
 		{
-			respondToStateRequest(transaction, (StateRequest)action);
+			respondToStateRequest(transaction.state, transaction.role, (StateRequest)action);
 		}
 	}
 	
@@ -301,8 +283,7 @@ public class Process3PC implements Runnable {
 		}
 		catch (NullPointerException ex)
 		{
-			// This should never happen. Maybe just fail here.
-			throw ex;
+			System.out.println("ERROR: while updating state. This should never happen.");
 		}
 	}
 	
@@ -320,9 +301,19 @@ public class Process3PC implements Runnable {
 		}
 		catch (NullPointerException ex)
 		{
-			// This should never happen. Maybe just fail here.
-			throw ex;
+			System.out.println("ERROR: while updating state. This should never happen.");
 		}
+	}
+	
+	/**
+	 * Upon receipt of PRECOMMIT, advance state to COMMITTABLE
+	 * and send an ACK to the coordinator.
+	 * @param transaction
+	 */
+	private void precommit(Precommit action)
+	{
+		updateState(action.transactionID, ThreePC.State.Committable);
+		send(new Ack(action.transactionID, this.id, action.senderID, ""));
 	}
 	
 	/**
@@ -349,39 +340,58 @@ public class Process3PC implements Runnable {
 		nextDecision = Decide.Yes;
 	}
 	
+	/**
+	 * Votes YES in response to a VOTE-REQ.
+	 * @param start3PC
+	 */
 	private void voteYes(Start3PC start3PC)
 	{
-		// Write YES to DT log
+		// Write YES to DT log.
 		dtLog.log(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
 		
-		// TODO: Send YES to coordinator
+		// Send YES to coordinator.
+		send(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
 		
-		// Now uncertain and awaiting word from coordinator
+		// Now uncertain and awaiting coordinator.
 		updateState(start3PC.transactionID, ThreePC.State.Uncertain);
 	}
 	
+	/**
+	 * Votes NO in response to a VOTE-REQ.
+	 * @param start3PC VOTE-REQ from a coordinator.
+	 */
 	private void voteNo(Start3PC start3PC)
 	{
+		// Write ABORT to DT log.
 		abort(start3PC.transactionID);
 		
-		// TODO: Send NO to coordinator
+		// Send ABORT to coordinator.
+		send(new Abort(start3PC.transactionID, this.id, start3PC.senderID, ""));
 	}
 	
 	/**
-	 * Responds to a STATE-REQ by sending current state.
-	 * @param request
+	 * Sends current state in response to a STATE-REQ.
+	 * @param request The STATE-REQ.
 	 */
-	private void respondToStateRequest(Transaction transaction, StateRequest request)
+	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request)
 	{		
-		send(new StateResponse(request.transactionID, this.id, request.senderID, transaction.state, transaction.role, ""));
+		send(new StateResponse(request.transactionID, this.id, request.senderID, state, role, ""));
 	}
 	
+	/**
+	 * Decides COMMIT: writes to DT log and changes state.
+	 * @param transactionId Transaction being committed.
+	 */
 	private void commit(Integer transactionId)
 	{
 		dtLog.log(new Commit(transactionId, this.id, this.id, ""));
 		updateState(transactionId, ThreePC.State.Committed);
 	}
 	
+	/**
+	 * Decides ABORT: writes to DT log and changes state.
+	 * @param transactionId Transaction being aborted.
+	 */
 	private void abort(Integer transactionId)
 	{
 		dtLog.log(new Abort(transactionId, this.id, this.id, ""));
