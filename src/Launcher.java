@@ -32,6 +32,7 @@ public class Launcher {
 	private static final String ALL_CLEAR_CMD = "allClear";
 	private static final String REJECT_NEXT_CHANGE_CMD = "rejectNextChange";
 	private static final String EXIT_CMD = "e";
+	private static final String SLEEP_CMD = "s";
 	
 	// Number of processes we choose to create for this execution.
 	public static int numProcesses;
@@ -122,8 +123,12 @@ public class Launcher {
 				
 				System.exit(-1);
 			}
-			
-			else {
+			else if (firstToken.equals(SLEEP_CMD)) {
+				
+				System.out.print("Sleeping for " + tokens[1] + " seconds.");
+				sleep(Integer.parseInt(tokens[1]));
+				
+			} else {
 				
 				System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
 				
@@ -223,6 +228,20 @@ public class Launcher {
 		netControllers.add(nc);
 		
 		return nc;
+	}
+	
+	
+	/**
+	 * Sleep the main thread for the specified number of seconds.
+	 * 
+	 * @param numSeconds, the specified number of seconds.
+	 * 
+	 * @throws InterruptedException if interrupted while sleeping.
+	 */
+	private static void sleep(int numSeconds) throws InterruptedException {
+		
+		// Note: sleep takes an argument in milliseconds.
+		Thread.sleep(numSeconds * 1000);
 	}
 }
 
