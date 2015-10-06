@@ -1,11 +1,13 @@
 import java.util.Collection;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.LinkedList;
-
+import java.util.List;
 import action.*;
+import framework.NetController;
 import log.TransactionLog;
 
-public class Process {
+public class Process implements Runnable {
 
 	/**
 	 * Possible 3PC roles.
@@ -110,11 +112,13 @@ public class Process {
 	private TransactionLog dtLog;
 	
 	/**
-	 * This process' transaction ID.
+	 * This process' ID.
 	 */
 	private Integer id = 0;
 	
 	private ProcessMonitor monitor;
+	
+	private NetController network;
 	
 	/**
 	 * Control variable used to halt PROTOCOL progress in main loop.
@@ -122,9 +126,11 @@ public class Process {
 	 */
 	private boolean halted;
 
-	public Process(String logName)
+	public Process(Integer id, NetController network)
 	{
-		dtLog = new TransactionLog(true, logName);
+		this.id = id;
+		this.network = network;
+		//this.dtLog = new TransactionLog(true, logName);
 	}
 	
 	/**

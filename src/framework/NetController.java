@@ -11,13 +11,23 @@
 
 package framework;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.logging.Level;
+
+import action.Action;
 
 /**
  * Public interface for managing network connections.
@@ -95,6 +105,28 @@ public class NetController {
 		return true;
 	}
 	
+	private static String toString(Serializable o) throws IOException 
+	{
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ObjectOutputStream oos = new ObjectOutputStream(out);
+		oos.writeObject(o);
+		oos.close();
+		return Base64.getEncoder().encodeToString(out.toByteArray());
+	}
+	
+	public boolean sendMsg(int process, Action msg)
+	{
+		try
+		{
+			return sendMsg(process, toString((Serializable)msg));
+		}
+		catch (Exception exc)
+		{
+			System.out.println("ERROR: IOException while sending message.");
+			return false;
+		}
+	}
+	
 	/**
 	 * Return a list of msgs received on established incoming sockets
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
@@ -118,6 +150,43 @@ public class NetController {
 		
 		return objs;
 	}
+	
+	private static Object fromString(String s) throws IOException, ClassNotFoundException 
+	{
+		byte[] data = Base64.getDecoder().decode(s);
+		ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(data));
+		Object o = in.readObject();
+		in.close();
+		return o;
+	}
+	
+	public List<Action> getReceived() 
+	{
+		List<String> msgs = getReceivedMsgs();
+		List<Action> received = new ArrayList<Action>();
+		for(Iterator<String> i = msgs.iterator(); i.hasNext();)
+		{
+			try
+			{
+				Object r = fromString(i.next());
+				if (r instanceof Action)
+				{
+					received.add((Action)r);
+				}
+			}
+			catch(IOException exc)
+			{
+				System.out.println("ERROR: I/O while receiving message.");
+				exc.printStackTrace();
+			}
+			catch(ClassNotFoundException exc)
+			{
+				System.out.println("ERROR: Class not found while receiving message.");
+			}
+		}
+		return received;
+	}
+	
 	/**
 	 * Shuts down threads and sockets.
 	 */

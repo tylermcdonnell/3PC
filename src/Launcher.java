@@ -65,7 +65,7 @@ public class Launcher {
 			} else if (firstToken.equals(CREATE_PROCESSES_CMD)) {
 				
 				System.out.println("Creating " + tokens[1] + " \"processes.\"");
-				createProcesses(tokens[1]);
+				createProcesses(Integer.valueOf(tokens[1]));
 				
 			} else if (firstToken.equals(KILL_CMD)) {
 				
@@ -143,19 +143,17 @@ public class Launcher {
 	 * 
 	 * @param numProcesses, the specified number of "processes" to create.
 	 */
-	private static void createProcesses(String numProcesses) {
-		
-		int numProcs = Integer.valueOf(numProcesses);
+	private static void createProcesses(int numProcesses) {
 		
 		// Store the number of processes to a global variable.
-		Launcher.numProcesses = numProcs;
+		Launcher.numProcesses = numProcesses;
 		
-		for (int i = 0; i < numProcs; i++) {
+		for (int i = 0; i < numProcesses; i++) {
 			
 			NetController nc = createNetController(i);
 			
 			// Pass in "i" as the process number for this process.
-			Runnable r = new MikeProcess(i, nc);
+			Runnable r = new Process(i, nc);
 			Thread d = new Thread(r);
 			d.start();
 			

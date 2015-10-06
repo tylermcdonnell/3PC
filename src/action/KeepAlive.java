@@ -6,7 +6,7 @@ public class KeepAlive extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	public KeepAlive(Integer transID, int senderID) 
+	public KeepAlive(Integer transID, Integer senderID) 
 	{
 		super(transID, senderID);
 	}
