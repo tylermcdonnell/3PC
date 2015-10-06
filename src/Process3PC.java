@@ -6,45 +6,33 @@ import java.util.List;
 import action.*;
 import framework.NetController;
 import log.TransactionLog;
+import protocol.ThreePC;
 
-public class Process implements Runnable {
+public class Process3PC implements Runnable {
 	
 	/**
 	 * The state kept for each 3PC transaction.
 	 */
 	private class Transaction
 	{
-		Role role;
-		State state;
+		Integer id;
+		ThreePC.Role role;
+		ThreePC.State state;
 		
-		Transaction(Role role, State state)
+		Transaction(Integer transactionId, ThreePC.Role role, ThreePC.State state)
 		{
+			this.id = transactionId;
 			this.role = role;
 			this.state = state;
 		}
 	}
 	
-	/**
-	 * Action + target for a message to be sent to another process.
-	 */
-	private class Message
-	{
-		Integer destinationId;
-		Action action;
-		
-		Message(Integer destinationId, Action action)
-		{
-			this.destinationId = destinationId;
-			this.action = action;
-		}
-	}
-
 	// Possible 3PC roles.
 	// Coordinator: Process "coordinating" the 3PC protocol.
 	// Participant: Process voting in 3PC protocol.
-	private enum Role
+	public enum Role
 	{
-		Coordinator, Participant
+		Coordinator, Participant;
 	}
 	
 	// Possible 3PC states.
@@ -52,7 +40,7 @@ public class Process implements Runnable {
 	// Uncertain:	The process has voted YES but not received a PRECOMMIT or ABORT.
 	// Committable:	The process has received PRECOMMIT, but has not received COMMIT.
 	// Committed:	The process has received and decided to COMMIT. 
-	private enum State 
+	public enum State 
 	{
 		Aborted, Uncertain, Committable, Committed
 	}
@@ -65,7 +53,6 @@ public class Process implements Runnable {
 	
 	// State for all active transactions.
 	private Hashtable<Integer, Transaction> transactions;
-	
 
 	// An outgoing queue of PROTOCOL messages. This is used to support the testing command
 	// partialMessage. During the core part of the main processing loop, we only enqueue 
@@ -79,16 +66,13 @@ public class Process implements Runnable {
 	// not delivered. With the protocol queue, both of these outgoing messages would be 
 	// enqueued, but only the first would be sent before HALT. Later on, when RESUME is
 	// sent, the message to p(2) is still first in the queue.
-	private LinkedList<Message> protocolSendQueue;
+	private LinkedList<Action> protocolSendQueue;
 	
 	// Buffered queue of received protocol messages (i.e., keep-alives have been filtered)
 	private LinkedList<Action> protocolRecvQueue;
 	
 	// Buffered list of received keep-alive messages to report to monitor.
 	private LinkedList<KeepAlive> recvKeepAlive;
-	
-	// This can be used to alter the next vote decision. YES by default.
-	Decide nextDecision = Decide.Yes;
 	
 	// Stable storage
 	private TransactionLog dtLog;
@@ -98,6 +82,9 @@ public class Process implements Runnable {
 	
 	// Used to monitor the life of all processes via Keep-Alives.
 	private ProcessMonitor monitor;
+	
+	// This can be used to alter the next vote decision. YES by default.
+	private volatile Decide nextDecision = Decide.Yes;
 
 	// A cumulative message count for all PROTOCOL messages.
 	// Note: may be modified/read by this process or controller.
@@ -120,7 +107,7 @@ public class Process implements Runnable {
 	 * @param network	Network to communicate with all other processes
 	 * @param numProcs	Total number of processes
 	 */
-	public Process(Integer id, NetController network, Integer numProcs)
+	public Process3PC(Integer id, NetController network, Integer numProcs)
 	{
 		this.id 			= id;
 		this.network 		= network;
@@ -208,18 +195,28 @@ public class Process implements Runnable {
 	 */
 	public void sendAll()
 	{
-		for(Iterator<Message> i = this.protocolSendQueue.iterator(); i.hasNext();)
+		for(Iterator<Action> i = this.protocolSendQueue.iterator(); i.hasNext();)
 		{
 			if (this.messageCount >= this.haltCount)
 			{
 				this.halted = true;
 				return;
 			}
-			Message m = i.next();
+			Action a = i.next();
 			i.remove();
-			this.network.sendMsg(m.destinationId, m.action);
+			this.network.sendMsg(a.destinationID, a);
 			this.messageCount += 1;
 		}
+	}
+	
+	/**
+	 * Enqueues an action to be sent to target process. Action will actually
+	 * be sent over the socket on a call to sendAll subject to halting logic.
+	 * @param action	Action to be sent.
+	 */
+	public void send(Action action)
+	{
+		this.protocolSendQueue.add(action);
 	}
 	
 	/**
@@ -232,12 +229,42 @@ public class Process implements Runnable {
 		Transaction transaction = transactions.get(action.transactionID);
 		if(transaction == null)
 		{
-			createTransaction(action.transactionID, Role.Participant, State.Aborted);
+			createTransaction(action.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted);
 		}
 		
-		if (action instanceof Start3PC)
+		if (transaction.state == ThreePC.State.Aborted)
 		{
-			vote((Start3PC)action);
+			if (action instanceof Start3PC)
+			{
+				vote((Start3PC)action);
+			}
+		}
+		else if (transaction.state == ThreePC.State.Uncertain)
+		{
+			if (action instanceof Precommit)
+			{
+				updateState(transaction.id, ThreePC.State.Committable);
+			}
+			else if (action instanceof Abort)
+			{
+				abort(transaction.id);
+			}
+		}
+		else if (transaction.state == ThreePC.State.Committable)
+		{
+			if (action instanceof Commit)
+			{
+				commit(transaction.id);
+			}
+		}
+		else if (transaction.state == ThreePC.State.Committed)
+		{
+			
+		}
+		
+		if (action instanceof StateRequest)
+		{
+			respondToStateRequest(transaction, (StateRequest)action);
 		}
 	}
 	
@@ -247,11 +274,11 @@ public class Process implements Runnable {
 	 * @param initialRole	Coordinator or Participant
 	 * @param initialState	Aborted, Uncertain, Committable, or Committed
 	 */
-	private void createTransaction(Integer transactionId, Role initialRole, State initialState)
+	private void createTransaction(Integer transactionId, ThreePC.Role initialRole, ThreePC.State initialState)
 	{
 		try
 		{
-			this.transactions.put(transactionId, new Transaction(initialRole, initialState));
+			this.transactions.put(transactionId, new Transaction(transactionId, initialRole, initialState));
 		}
 		catch (Exception ex)
 		{
@@ -265,7 +292,7 @@ public class Process implements Runnable {
 	 * @param id			id of process to update
 	 * @param initialState	new state, Aborted, Uncertain, Committable, Committed
 	 */
-	private void updateState(Integer transactionId, State state)
+	private void updateState(Integer transactionId, ThreePC.State state)
 	{
 		try
 		{
@@ -284,7 +311,7 @@ public class Process implements Runnable {
 	 * @param transactionId	id of process to update
 	 * @param role			new role, Participant or Coordinator
 	 */
-	private void updateRole(Integer transactionId, Role role)
+	private void updateRole(Integer transactionId, ThreePC.Role role)
 	{
 		try
 		{
@@ -330,7 +357,7 @@ public class Process implements Runnable {
 		// TODO: Send YES to coordinator
 		
 		// Now uncertain and awaiting word from coordinator
-		updateState(start3PC.transactionID, State.Uncertain);
+		updateState(start3PC.transactionID, ThreePC.State.Uncertain);
 	}
 	
 	private void voteNo(Start3PC start3PC)
@@ -340,8 +367,24 @@ public class Process implements Runnable {
 		// TODO: Send NO to coordinator
 	}
 	
+	/**
+	 * Responds to a STATE-REQ by sending current state.
+	 * @param request
+	 */
+	private void respondToStateRequest(Transaction transaction, StateRequest request)
+	{		
+		send(new StateResponse(request.transactionID, this.id, request.senderID, transaction.state, transaction.role, ""));
+	}
+	
+	private void commit(Integer transactionId)
+	{
+		dtLog.log(new Commit(transactionId, this.id, this.id, ""));
+		updateState(transactionId, ThreePC.State.Committed);
+	}
+	
 	private void abort(Integer transactionId)
 	{
 		dtLog.log(new Abort(transactionId, this.id, this.id, ""));
+		updateState(transactionId, ThreePC.State.Aborted);
 	}
 }
