@@ -25,9 +25,9 @@ public class Abort extends Action implements Serializable {
 	/**
 	 * Default constructor.
 	 */
-	public Abort(Integer transactionID, Integer senderID, String message)
+	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message)
 	{
-		super(transactionID, senderID);
+		super(transactionID, senderID, destinationID);
 		this.message = message;
 	}
 }

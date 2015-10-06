@@ -9,6 +9,9 @@ public class Action implements Serializable {
 	// Who is sending this action.
 	public int senderID;
 	
+	// Who is the destination for this action.
+	public int destinationID;
+	
 	// Each music action (add, edit, remove) has a transaction ID associated
 	// with it.  Each message in the entire run of the 3PC protocol associated
 	// with this music action will include this ID in all of the messages passed
@@ -16,7 +19,7 @@ public class Action implements Serializable {
 	public Integer transactionID;
 	
 	
-	public Action(Integer transactionID, Integer senderID)
+	public Action(Integer transactionID, Integer senderID, Integer destinationID)
 	{
 		this.transactionID = transactionID;
 		this.senderID = senderID;

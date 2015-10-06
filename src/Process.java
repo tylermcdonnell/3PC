@@ -8,29 +8,6 @@ import framework.NetController;
 import log.TransactionLog;
 
 public class Process implements Runnable {
-
-	/**
-	 * Possible 3PC roles.
-	 * Coordinator: Process "coordinating" the 3PC protocol.
-	 * Participant: Process voting in 3PC protocol.
-	 *
-	 */
-	private enum Role
-	{
-		Coordinator, Participant
-	}
-	
-	/**
-	 * Possible 3PC states.
-	 * Aborted: 	The process has not voted, has voted NO, or has received an ABORT.
-	 * Uncertain:	The process has voted YES but not received a PRECOMMIT or ABORT.
-	 * Committable:	The process has received PRECOMMIT, but has not received COMMIT.
-	 * Committed:	The process has received and decided to COMMIT. 
-	 */
-	private enum State 
-	{
-		Aborted, Uncertain, Committable, Committed
-	}
 	
 	/**
 	 * The state kept for each 3PC transaction.
@@ -61,76 +38,114 @@ public class Process implements Runnable {
 			this.action = action;
 		}
 	}
+
+	// Possible 3PC roles.
+	// Coordinator: Process "coordinating" the 3PC protocol.
+	// Participant: Process voting in 3PC protocol.
+	private enum Role
+	{
+		Coordinator, Participant
+	}
 	
-	/**
-	 * State for all active transactions.
-	 */
-	private Hashtable<Integer, Transaction> transactions;
+	// Possible 3PC states.
+	// Aborted: 	The process has not voted, has voted NO, or has received an ABORT.
+	// Uncertain:	The process has voted YES but not received a PRECOMMIT or ABORT.
+	// Committable:	The process has received PRECOMMIT, but has not received COMMIT.
+	// Committed:	The process has received and decided to COMMIT. 
+	private enum State 
+	{
+		Aborted, Uncertain, Committable, Committed
+	}
 	
-	/**
-	 * Possible vote decisions.
-	 */
+	// Possible vote decisions.
 	private enum Decide
 	{
 		Yes, No
 	}
 	
-	/**
-	 * An outgoing queue of PROTOCOL messages. This is used to support the testing command
-	 * partialMessage. During the core part of the main processing loop, we only enqueue 
-	 * messages in the outgoing queue. At the end of every processing loop, we send the
-	 * messages that have been enqueued over the socket. 
-	 * 
-	 * Consider the following concrete scenario: 
-	 * Three processes: coordinator p(0) and participants and p(1) and p(2).
-	 * partialMessage(0,1) tells the coordinator to halt after sending one message to p(1).
-	 * We might then choose to kill p(2) and resume execution so that the message to p(2) is
-	 * not delivered. With the protocol queue, both of these outgoing messages would be 
-	 * enqueued, but only the first would be sent before HALT. Later on, when RESUME is
-	 * sent, the message to p(2) is still first in the queue.
-	 */
+	// State for all active transactions.
+	private Hashtable<Integer, Transaction> transactions;
+	
+
+	// An outgoing queue of PROTOCOL messages. This is used to support the testing command
+	// partialMessage. During the core part of the main processing loop, we only enqueue 
+	// messages in the outgoing queue. At the end of every processing loop, we send the
+	// messages that have been enqueued over the socket. 
+	// 
+	// Consider the following concrete scenario: 
+	// Three processes: coordinator p(0) and participants and p(1) and p(2).
+	// partialMessage(0,1) tells the coordinator to halt after sending one message to p(1).
+	// We might then choose to kill p(2) and resume execution so that the message to p(2) is
+	// not delivered. With the protocol queue, both of these outgoing messages would be 
+	// enqueued, but only the first would be sent before HALT. Later on, when RESUME is
+	// sent, the message to p(2) is still first in the queue.
 	private LinkedList<Message> protocolSendQueue;
 	
-	/**
-	 * Buffered queue of received protocol messages (i.e., keep-alives have been filtered)
-	 */
-	private LinkedList<Message> protocolRecvQueue;
+	// Buffered queue of received protocol messages (i.e., keep-alives have been filtered)
+	private LinkedList<Action> protocolRecvQueue;
 	
-	/**
-	 * Buffered list of received keep-alive messages to report to monitor.
-	 */
+	// Buffered list of received keep-alive messages to report to monitor.
 	private LinkedList<KeepAlive> recvKeepAlive;
 	
-	/**
-	 * This can be used to alter the next vote decision. YES by default.
-	 */
+	// This can be used to alter the next vote decision. YES by default.
 	Decide nextDecision = Decide.Yes;
 	
-	/**
-	 * Stable storage
-	 */
+	// Stable storage
 	private TransactionLog dtLog;
 	
-	/**
-	 * This process' ID.
-	 */
+	// This process's id
 	private Integer id = 0;
 	
+	// Used to monitor the life of all processes via Keep-Alives.
 	private ProcessMonitor monitor;
+
+	// A cumulative message count for all PROTOCOL messages.
+	// Note: may be modified/read by this process or controller.
+	private volatile Integer messageCount;
+	
+	// When message count hits this number, protocol should halt.
+	// Note: may be modified/read by this process or controller.
+	private volatile Integer haltCount;
+	
+	// Control variable used to halt PROTOCOL progress in main loop.
+	// Note: does not affect process monitor
+	// Note: may be modified/read by this process or controller.
+	private volatile boolean halted;
 	
 	private NetController network;
 	
 	/**
-	 * Control variable used to halt PROTOCOL progress in main loop.
-	 * Note: does not affect heartbeat monitor.
+	 * Constructor.
+	 * @param id		ID of this process
+	 * @param network	Network to communicate with all other processes
+	 * @param numProcs	Total number of processes
 	 */
-	private boolean halted;
-
-	public Process(Integer id, NetController network)
+	public Process(Integer id, NetController network, Integer numProcs)
 	{
-		this.id = id;
-		this.network = network;
-		//this.dtLog = new TransactionLog(true, logName);
+		this.id 			= id;
+		this.network 		= network;
+		//this.dtLog 		= new TransactionLog(true, logName);
+		
+		this.messageCount 	= 0;
+		this.haltCount    	= Integer.MAX_VALUE;
+	}
+	
+	/**
+	 * Have this process halt protocol after sending specified number of messages.
+	 * @param n
+	 */
+	public void haltAfter(Integer n)
+	{
+		this.haltCount = this.messageCount + n;
+	}
+	
+	/**
+	 * If this process's protocol has been halted, resume.
+	 */
+	public void resumeMessages()
+	{
+		this.halted = false;
+		this.haltCount = Integer.MAX_VALUE;
 	}
 	
 	/**
@@ -140,17 +155,70 @@ public class Process implements Runnable {
 	{
 		while(true)
 		{
-			// TODO: Receive all messages over network and filter them into
-			// 		 appropriate queues.
+			// Pull all messages from network and filter.
+			receiveAll();
 			
+			// Update statuses of processes with received keep-alive messages.
 			Collection<Integer> deadProcesses = monitor.monitor(recvKeepAlive);
 			
-			if(!halted)
+			if(!this.halted)
 			{
-				// TODO: Process received message queue
+				// Process all received messages.
+				for(Iterator<Action> i = this.protocolRecvQueue.iterator(); i.hasNext();)
+				{
+					Action a = i.next();
+					i.remove();
+					handle(a);
+				}
 				
-				// TODO: Report dead processes as timeouts for all transactions.
+				// TODO: Report timeouts (dead) for all transactions applicable.
+				
+				// Send all outgoing messages, constrained by haltCount
+				sendAll();
 			}
+		}
+	}
+	
+	/**
+	 * Receive all messages from the network and filter them into Keep-Alive and
+	 * protocol queues. This allows us to maintain life monitoring while 
+	 * separately pausing the protocol for testing purposes.
+	 */
+	public void receiveAll()
+	{
+		List<Action> received = network.getReceived();
+		
+		for (Iterator<Action> i = received.iterator(); i.hasNext();)
+		{
+			Action a = i.next();
+			if (a instanceof KeepAlive)
+			{
+				this.recvKeepAlive.add((KeepAlive)a);
+			}
+			else
+			{
+				this.protocolRecvQueue.add(a);
+			}
+		}
+	}
+	
+	/**
+	 * Enqueued messages are sent over the socket. We enqueue all messages and 
+	 * then send with SendAll so that we can enforce partialMessage.
+	 */
+	public void sendAll()
+	{
+		for(Iterator<Message> i = this.protocolSendQueue.iterator(); i.hasNext();)
+		{
+			if (this.messageCount >= this.haltCount)
+			{
+				this.halted = true;
+				return;
+			}
+			Message m = i.next();
+			i.remove();
+			this.network.sendMsg(m.destinationId, m.action);
+			this.messageCount += 1;
 		}
 	}
 	
@@ -158,8 +226,9 @@ public class Process implements Runnable {
 	 * Public handler for incoming actions.
 	 * @param action
 	 */
-	public void handle(Integer sender, Action action)
+	public void handle(Action action)
 	{
+		System.out.println("Process " + this.id + " receives: " + action.toString());
 		Transaction transaction = transactions.get(action.transactionID);
 		if(transaction == null)
 		{
@@ -255,9 +324,13 @@ public class Process implements Runnable {
 	
 	private void voteYes(Start3PC start3PC)
 	{
-		dtLog.log(new Yes(start3PC.transactionID, this.id, "", start3PC.getParticipants()));
+		// Write YES to DT log
+		dtLog.log(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
 		
 		// TODO: Send YES to coordinator
+		
+		// Now uncertain and awaiting word from coordinator
+		updateState(start3PC.transactionID, State.Uncertain);
 	}
 	
 	private void voteNo(Start3PC start3PC)
@@ -269,6 +342,6 @@ public class Process implements Runnable {
 	
 	private void abort(Integer transactionId)
 	{
-		dtLog.log(new Abort(id, this.id, ""));
+		dtLog.log(new Abort(transactionId, this.id, this.id, ""));
 	}
 }

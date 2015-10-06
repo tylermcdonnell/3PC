@@ -158,7 +158,7 @@ public class Launcher {
 			NetController nc = createNetController(i);
 			
 			// Pass in "i" as the process number for this process.
-			Runnable r = new Process(i, nc);
+			Runnable r = new Process(i, nc, numProcesses);
 			Thread d = new Thread(r);
 			d.start();
 			
