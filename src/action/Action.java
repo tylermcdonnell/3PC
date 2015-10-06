@@ -12,8 +12,9 @@ public class Action {
 	public Integer transactionID;
 	
 	
-	public Action(Integer transID, int senderID)
+	public Action(Integer transactionID, Integer senderID)
 	{
-		this.transactionID = transID;
+		this.transactionID = transactionID;
+		this.senderID = senderID;
 	}
 }
