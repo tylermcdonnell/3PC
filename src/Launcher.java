@@ -183,7 +183,7 @@ public class Launcher {
 		
 		// Dynamically create a config file for this process.
 		// Reuse the same file for all processes.
-		String fileName = "config" + processNumber + ".txt";
+		String fileName = "config.txt";
 		File file = new File(fileName);
 		
 		PrintWriter out = null;
