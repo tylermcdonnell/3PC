@@ -41,9 +41,13 @@ public class NetController {
 	
 	// Establish outgoing connection to a process
 	private synchronized void initOutgoingConn(int proc) throws IOException {
+		
+		// MIKE: Make sure this is only called once per outgoing connection.
 		if (outSockets[proc] != null)
 			throw new IllegalStateException("proc " + proc + " not null");
 		
+		// MIKE: config.addresses[proc] can just be localhost.
+		// MIKE: pulls the port for this new connection from config.ports array.
 		outSockets[proc] = new OutgoingSock(new Socket(config.addresses[proc], config.ports[proc]));
 		config.logger.info(String.format("Server %d: Socket to %d established", 
 				config.procNum, proc));
