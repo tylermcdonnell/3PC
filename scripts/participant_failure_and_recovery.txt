@@ -1,0 +1,9 @@
+cp 3
+pm 0 2
+3pc
+s 1
+kill 1
+pm 0 2
+rm 0
+revive 1
+rm 0

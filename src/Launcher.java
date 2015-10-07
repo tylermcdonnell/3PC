@@ -98,6 +98,7 @@ public class Launcher {
 			// Note: kill should spin-wait on the status of the thread to be
 			// terminated
 			System.out.println("Killing process " + parameters[0] + ".");
+			kill(Integer.valueOf(parameters[0]));
 		} 
 		else if (command.equals(KILL_ALL_CMD)) 
 		{
@@ -112,6 +113,7 @@ public class Launcher {
 		else if (command.equals(REVIVE_CMD)) 
 		{
 			System.out.println("Reviving process " + parameters[0] + ".");
+			revive(Integer.valueOf(parameters[0]));
 		} 
 		else if (command.equals(REVIVE_LAST_CMD)) 
 		{		
@@ -205,9 +207,15 @@ public class Launcher {
 		}
 	}
 	
+	private static void kill(Integer id)
+	{
+		System.out.println("CONTROLLER: killed process " + id);
+		threads.get(id).stop();
+	}
+	
 	private static void revive(Integer id)
 	{
-		Process3PC r = new Process3PC(id, netControllers.get(id), numProcesses);
+		Process3PC r = new Process3PC(id, netControllers.get(id), numProcesses, false);
 		Thread d = new Thread(r);
 		d.start();
 		threads.set(id, d);
@@ -230,7 +238,7 @@ public class Launcher {
 			NetController nc = createNetController(i);
 			
 			// Pass in "i" as the process number for this process.
-			Process3PC r = new Process3PC(i, nc, numProcesses);
+			Process3PC r = new Process3PC(i, nc, numProcesses, true);
 			Thread d = new Thread(r);
 			d.start();
 			

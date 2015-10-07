@@ -133,6 +133,23 @@ public class ProcessMonitor {
 	}
 	
 	/**
+	 * @return a list of processes currently considered to be live:
+	 * 		   i.e., we have received a keep-alive from them.
+	 */
+	public Collection<Integer> getLive()
+	{
+		ArrayList<Integer> live = new ArrayList<Integer>();
+		for(int i = 0; i < numProcesses; i++)
+		{
+			if (this.statuses.get(i).live == true)
+			{
+				live.add(i);
+			}
+		}
+		return live;
+	}
+	
+	/**
 	 * @return  returns a list of processes currently considered 
 	 * 			to be crashed: i.e., we have not received a keep-
 	 * 			alive from them in more than timeout milliseconds.

@@ -25,11 +25,11 @@ public class StateRequest extends Action implements Serializable {
 		return "COMMIT: " + this.message;
 	}
 
-	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, Integer role, Integer state, String message)
+	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, String message)
 	{
 		super(transactionID, senderID, destinationID);
-		this.role 		= role;
-		this.state 		= state;
+		//this.role 		= role;
+		//this.state 		= state;
 		this.message 	= message;
 	}
 	

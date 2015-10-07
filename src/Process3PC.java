@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -26,7 +27,13 @@ public class Process3PC implements Runnable {
 		Integer yesCount;
 		
 		// Used to count ACKs
-		Integer ackCount;
+		ArrayList<Integer> acks;
+		
+		// This is used to assess timeouts from relevant individuals during a transaction.
+		ArrayList<Integer> waitingOn;
+		
+		boolean committed;
+		boolean aborted;
 		
 		Transaction(Integer transactionId, ThreePC.Role role, ThreePC.State state)
 		{
@@ -35,7 +42,11 @@ public class Process3PC implements Runnable {
 			this.state 		= state;		
 			this.yesCount 	= 0;
 			this.voteCount  = 0;
-			this.ackCount   = 0;
+			this.acks 		= new ArrayList<Integer>();
+			this.waitingOn  = new ArrayList<Integer>();
+			
+			this.committed 	= false;
+			this.aborted   	= false;
 		}
 	}
 	
@@ -104,12 +115,12 @@ public class Process3PC implements Runnable {
 	 * @param network	Network to communicate with all other processes
 	 * @param numProcs	Total number of processes
 	 */
-	public Process3PC(Integer id, NetController network, Integer numProcs)
+	public Process3PC(Integer id, NetController network, Integer numProcs, boolean clearStableStorage)
 	{
 		this.id 					= id;
 		this.numProcesses			= numProcs;
 		this.network 				= network;
-		this.dtLog 					= new TransactionLog(true, "process" + this.id.toString() + ".log");
+		this.dtLog 					= new TransactionLog(clearStableStorage, "process" + this.id.toString() + ".log");
 		this.protocolRecvQueue 		= new LinkedList<Action>();
 		this.protocolSendQueue		= new LinkedList<Action>();
 		this.recvKeepAlive			= new LinkedList<KeepAlive>();
@@ -117,6 +128,12 @@ public class Process3PC implements Runnable {
 		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 2000, 250);
 		this.messageCount 			= 0;
 		this.haltCount    			= Integer.MAX_VALUE;
+		
+		if (clearStableStorage == false)
+		{
+			System.out.println("Recovering...");
+			recover();
+		}
 	}
 	
 	public synchronized void start(Integer transactionId)
@@ -146,6 +163,63 @@ public class Process3PC implements Runnable {
 	}
 	
 	/**
+	 * Read through DT log (stable storage) to initialize transaction states.
+	 */
+	private void recover()
+	{
+		ArrayList<Action> history = this.dtLog.read();
+		
+		// Load status of each transaction in history. We should be able to 
+	    // simply do this sequentially, since the most recent entry in the
+		// DT log should be the most important. For instance, it is possible
+		// that we wrote a YES to the log and then later an ABORT. By traversing
+		// the DT log sequentially, we would overwrite the UNCERTAIN state
+		// with the final ABORT state.
+		for (Iterator<Action> i = history.iterator(); i.hasNext();)
+		{
+			Action a = i.next();
+			if (a instanceof Yes)
+			{
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Uncertain));
+			}
+			if (a instanceof Abort)
+			{
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted));
+				this.transactions.get(a.transactionID).aborted = true;
+			}
+			if (a instanceof Commit)
+			{
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Committed));
+				this.transactions.get(a.transactionID).committed = true;
+			}
+		}
+		
+		// (1) For all UNCERTAIN transactions, send out to STATE-REQ to all
+		// 	   processes. This is necessary in case all other processes have 
+		//     come to a decision and are no longer planning to broadcast 
+		//     that decision to other processes.
+		// (2) For all processes COMMITTED or ABORTED transactions, broadcast
+		// 	   decisions to all live nodes.
+		for (Iterator<Map.Entry<Integer, Transaction>> i = this.transactions.entrySet().iterator(); i.hasNext();)
+		{
+			Transaction t = i.next().getValue();
+			if (t.state == ThreePC.State.Uncertain)
+			{
+				System.out.println("Sending STATE REQ");
+				sendStateRequest(t.id, getListOfAllProcesses(this.id));
+			}
+			if (t.state == ThreePC.State.Aborted)
+			{
+				sendAbort(t.id, this.monitor.getLive());
+			}
+			if (t.state == ThreePC.State.Committed)
+			{
+				sendCommit(t.id, this.monitor.getLive());
+			}
+		}
+	}
+	
+	/**
 	 * This is the "life" of the process. i.e., this is the main processing loop.
 	 */
 	public void run()
@@ -171,16 +245,25 @@ public class Process3PC implements Runnable {
 					}
 				}
 
-				// Report TIMEOUT from this process for all transactions.
+				// Notify transactions waiting on dead processes.
+				for (Iterator<Map.Entry<Integer, Transaction>> ti = this.transactions.entrySet().iterator(); ti.hasNext();)
+				{
+					Map.Entry<Integer, Transaction> entry = ti.next();
+					Transaction t = entry.getValue();
+					for (Iterator<Integer> pi = deadProcesses.iterator(); pi.hasNext();)
+					{
+						Integer deadProcess = pi.next();
+						if (t.waitingOn.contains(deadProcess))
+						{
+							handle(new Timeout(t.id, deadProcess, this.id));
+						}
+					}
+				}
+				
 				for(Iterator<Integer> pi = deadProcesses.iterator(); pi.hasNext();)
 				{
 					Integer deadProcess = pi.next();
-					for(Iterator<Map.Entry<Integer, Transaction>> ti = this.transactions.entrySet().iterator(); ti.hasNext();)
-					{
-						Map.Entry<Integer, Transaction> entry = ti.next();
-						Integer transactionId = entry.getKey();
-						handle(new Timeout(transactionId, deadProcess, this.id));
-					}
+
 				}
 				
 				// Send all outgoing messages, constrained by haltCount
@@ -258,7 +341,7 @@ public class Process3PC implements Runnable {
 		// Controller selected this process to begin 3PC as coordinator.
 		if (action instanceof BeginProtocol)
 		{
-			start3PC((BeginProtocol)action);
+			start3PC(transaction, (BeginProtocol)action);
 		}
 		
 		if (transaction.state == ThreePC.State.Aborted)
@@ -273,29 +356,39 @@ public class Process3PC implements Runnable {
 			}
 			else if (action instanceof Start3PC)
 			{
-				vote((Start3PC)action);
+				vote(transaction, (Start3PC)action);
 			}
 		}
 		else if (transaction.state == ThreePC.State.Uncertain)
 		{
 			if (action instanceof Precommit)
 			{
-				precommit((Precommit)action);
+				precommit(transaction, (Precommit)action);
 			}
 			else if (action instanceof Abort)
 			{
-				abort(transaction.id);
+				abort(transaction);
 			}
 		}
 		else if (transaction.state == ThreePC.State.Committable)
 		{
 			if (action instanceof Commit)
 			{
-				commit(transaction.id);
+				commit(transaction);
 			}
 			else if (action instanceof Ack && transaction.role == ThreePC.Role.Coordinator)
 			{
-				processAck(transaction);
+				// Document ACK.
+				processAck((Ack)action, transaction);
+			}
+			else if (action instanceof Timeout && transaction.role == ThreePC.Role.Coordinator)
+			{
+				// Even if we don't receive all ACKs, COMMIT and send COMMIT
+				// to those who did ACK. Note that by committing, this process
+				// moves out of the COMMITTABLE state, so multiple timeouts
+				// from different processes will not all generate commit messages.
+				commit(transaction);
+				sendCommit(transaction.id, transaction.acks);
 			}
 		}
 		else if (transaction.state == ThreePC.State.Committed)
@@ -303,6 +396,15 @@ public class Process3PC implements Runnable {
 			
 		}
 		
+		// Handling these commands should be the same independent of state.
+		if (action instanceof Commit)
+		{
+			commit(transaction);
+		}
+		if (action instanceof Abort)
+		{
+			abort(transaction);
+		}
 		if (action instanceof StateRequest)
 		{
 			respondToStateRequest(transaction.state, transaction.role, (StateRequest)action);
@@ -368,24 +470,28 @@ public class Process3PC implements Runnable {
 	
 	/**
 	 * Returns a collection of all IDs in range (0, numProcesses).
+	 * @param exclude Process to exclude (used to exclude self)
 	 */
-	private Collection<Integer> getListOfAllProcesses()
+	private Collection<Integer> getListOfAllProcesses(Integer exclude)
 	{
 		Collection<Integer> list = new LinkedList<Integer>();
 		for(int i = 0; i < this.numProcesses; i++)
 		{
-			list.add(i);
+			if (i != exclude)
+			{
+				list.add(i);
+			}
 		}
 		return list;
 	}
 	
-	private void start3PC(BeginProtocol action)
+	private void start3PC(Transaction t, BeginProtocol action)
 	{
-		Collection<Integer> participants = getListOfAllProcesses();
+		Collection<Integer> participants = getListOfAllProcesses(this.id);
 		
 		// Controller has selected this process to be coordinator.
-		updateState(action.transactionID, ThreePC.State.Aborted);
-		updateRole(action.transactionID, ThreePC.Role.Coordinator);
+		updateState(t.id, ThreePC.State.Aborted);
+		updateRole(t.id, ThreePC.Role.Coordinator);
 		
 		// Log START3PC.
 		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants));
@@ -398,6 +504,9 @@ public class Process3PC implements Runnable {
 				send(new Start3PC(action.transactionID, this.id, i, "", participants));
 			}
 		}
+		
+		// We are now waiting on responses form all processes.
+		t.waitingOn.addAll(getListOfAllProcesses(this.id));
 	}
 	
 	/**
@@ -405,10 +514,16 @@ public class Process3PC implements Runnable {
 	 * and send an ACK to the coordinator.
 	 * @param transaction
 	 */
-	private void precommit(Precommit action)
+	private void precommit(Transaction t, Precommit action)
 	{
+		// We are no longer waiting for PRECOMMIT or ABORT.
+		t.waitingOn.clear();
+		
 		updateState(action.transactionID, ThreePC.State.Committable);
 		send(new Ack(action.transactionID, this.id, action.senderID, ""));
+		
+		// We are now waiting on a COMMIT message from the coordinator.
+		t.waitingOn.add(action.senderID);
 	}
 	
 	private void countVote(Transaction transaction, Decide vote)
@@ -429,6 +544,9 @@ public class Process3PC implements Runnable {
 	
 	private void endVoting(Transaction transaction)
 	{
+		// We are no longer waiting on any participants.
+		transaction.waitingOn.clear();
+		
 		// If all participants voted YES, PRECOMMIT and send PRECOMMIT to all.
 		if (transaction.yesCount == this.numProcesses - 1)
 		{
@@ -440,11 +558,14 @@ public class Process3PC implements Runnable {
 					send(new Precommit(transaction.id, this.id, i, ""));
 				}
 			}
+			
+			// We are now waiting on ACKs from all participants.
+			transaction.waitingOn.addAll(getListOfAllProcesses(this.id));
 		}
 		// Else, ABORT and send ABORT to all.
 		else
 		{
-			abort(transaction.id);
+			abort(transaction);
 			for(int i = 0; i < this.numProcesses; i++)
 			{
 				if (i != this.id);
@@ -453,6 +574,8 @@ public class Process3PC implements Runnable {
 				}
 			}
 		}
+		
+
 	}
 	
 	/**
@@ -464,7 +587,7 @@ public class Process3PC implements Runnable {
 	 * 
 	 * @param start3PC	triggering START3PC action
 	 */
-	private void vote(Start3PC start3PC)
+	private void vote(Transaction t, Start3PC start3PC)
 	{ 
 		if (nextDecision == Decide.Yes)
 		{
@@ -472,11 +595,14 @@ public class Process3PC implements Runnable {
 		}
 		else if (nextDecision == Decide.No)
 		{
-			voteNo(start3PC);
+			voteNo(t, start3PC);
 		}
 		
 		// Default should be YES.
 		nextDecision = Decide.Yes;
+		
+		// We are now waiting on a response from the coordinator.
+		t.waitingOn.add(start3PC.senderID);
 	}
 	
 	/**
@@ -499,29 +625,61 @@ public class Process3PC implements Runnable {
 	 * Votes NO in response to a VOTE-REQ.
 	 * @param start3PC VOTE-REQ from a coordinator.
 	 */
-	private void voteNo(Start3PC start3PC)
+	private void voteNo(Transaction t, Start3PC start3PC)
 	{
 		// Write ABORT to DT log.
-		abort(start3PC.transactionID);
+		abort(t);
 		
 		// Send ABORT to coordinator.
 		send(new Abort(start3PC.transactionID, this.id, start3PC.senderID, ""));
 	}
 	
-	private void processAck(Transaction transaction)
+	private void processAck(Ack action, Transaction transaction)
 	{
-		transaction.ackCount += 1;
-		if (transaction.ackCount == this.numProcesses - 1)
+		transaction.acks.add(action.senderID);
+		if (transaction.acks.size() == this.numProcesses - 1)
 		{
-			commit(transaction.id);
-			
-			for(int i = 0; i < this.numProcesses; i++)
-			{
-				if (i != this.id)
-				{
-					send(new Commit(transaction.id, this.id, i, ""));	
-				}
-			}
+			commit(transaction);
+			sendCommit(transaction.id, transaction.acks);
+		}
+	}
+	
+	/**
+	 * Sends COMMIT to the specified processes.
+	 * @param transactionId 	ID of transaction for this COMMIT
+	 * @param processes 		List of process IDs
+	 */
+	private void sendCommit(Integer transactionId, Collection<Integer> processes)
+	{
+		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
+		{
+			send(new Commit(transactionId, this.id, i.next(), ""));	
+		}
+	}
+	
+	/**
+	 * Sends STATE-REQ to specified processes.
+	 * @param transactionId 	ID of transaction for this STATEREQ
+	 * @param processes			List of process IDs
+	 */
+	private void sendStateRequest(Integer transactionId, Collection<Integer> processes)
+	{
+		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
+		{
+			send(new StateRequest(transactionId, this.id, i.next(), ""));	
+		}
+	}
+	
+	/**
+	 * Sends ABORT to specified processes.
+	 * @param transactionId		ID of transaction for this ABORT
+	 * @param processes			List of process IDs
+	 */
+	private void sendAbort(Integer transactionId, Collection<Integer> processes)
+	{
+		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
+		{
+			send(new Abort(transactionId, this.id, i.next(), ""));	
 		}
 	}
 	
@@ -531,28 +689,53 @@ public class Process3PC implements Runnable {
 	 */
 	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request)
 	{
-		send(new StateResponse(request.transactionID, this.id, request.senderID, state, role, ""));
+		System.out.println("Responding to state request.");
+		if (state == ThreePC.State.Committed)
+		{
+			send(new Commit(request.transactionID, this.id, request.senderID, ""));
+		}
+		//TODO TYLER: I am skeptical that ABORTED is sufficient, since we by default start in this state.
+		if (state == ThreePC.State.Aborted)
+		{
+			send(new Abort(request.transactionID, this.id, request.senderID, ""));
+		}
+			
+	    // TYLER: I don't think we need a separate message type.
+		//send(new StateResponse(request.transactionID, this.id, request.senderID, state, role, ""));
 	}
 	
 	/**
 	 * Decides COMMIT: writes to DT log and changes state.
 	 * @param transactionId Transaction being committed.
 	 */
-	private void commit(Integer transactionId)
+	private void commit(Transaction t)
 	{
-		dtLog.log(new Commit(transactionId, this.id, this.id, ""));
-		System.out.println(transactionId + ": COMMIT by process " + this.id);
-		updateState(transactionId, ThreePC.State.Committed);
+		if (!t.committed)
+		{
+			t.committed = true;
+			dtLog.log(new Commit(t.id, this.id, this.id, ""));
+			System.out.println(t.id + ": COMMIT by process " + this.id);
+			updateState(t.id, ThreePC.State.Committed);
+			
+			// We are no longer waiting on anyone. We're done.
+			t.waitingOn.clear();
+		}
 	}
 	
 	/**
 	 * Decides ABORT: writes to DT log and changes state.
 	 * @param transactionId Transaction being aborted.
 	 */
-	private void abort(Integer transactionId)
+	private void abort(Transaction t)
 	{
-		dtLog.log(new Abort(transactionId, this.id, this.id, ""));
-		System.out.println(transactionId + ": ABORT by process " + this.id);
-		updateState(transactionId, ThreePC.State.Aborted);
+		if (!t.aborted)
+		{
+			dtLog.log(new Abort(t.id, this.id, this.id, ""));
+			System.out.println(t.id + ": ABORT by process " + this.id);
+			updateState(t.id, ThreePC.State.Aborted);
+			
+			// We are no longer waiting on anyone. We're done.
+			t.waitingOn.clear();
+		}
 	}
 }
