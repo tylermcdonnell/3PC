@@ -227,17 +227,27 @@ public class Process3PC implements Runnable {
 		while(true)
 		{
 			// Pull all messages from network and filter.
+			// Get message from sockets.
 			receiveAll();
 			
-			// Update statuses of processes with received keep-alive messages.
-			Collection<Integer> deadProcesses = monitor.monitor(recvKeepAlive);
+			//******************************************************************
+			//* Keep alive stuff.
+			//******************************************************************
 			
+			// Update statuses of processes with received keep-alive messages.
+			Collection<Integer> deadProcesses = monitor.monitor(recvKeepAlive);	
+			
+			//******************************************************************
+			//* Below is protocol only (no keep-alive stuff).
+			//******************************************************************
+			
+			// A process is halted if you give a sendPartial command.
 			if(!this.halted)
 			{
 				// Process all received messages.
 				synchronized(this.protocolRecvQueue)
 				{
-					for(Iterator<Action> i = this.protocolRecvQueue.iterator(); i.hasNext();)
+					for (Iterator<Action> i = this.protocolRecvQueue.iterator(); i.hasNext();)
 					{
 						Action a = i.next();
 						i.remove();
@@ -258,12 +268,6 @@ public class Process3PC implements Runnable {
 							handle(new Timeout(t.id, deadProcess, this.id));
 						}
 					}
-				}
-				
-				for(Iterator<Integer> pi = deadProcesses.iterator(); pi.hasNext();)
-				{
-					Integer deadProcess = pi.next();
-
 				}
 				
 				// Send all outgoing messages, constrained by haltCount
