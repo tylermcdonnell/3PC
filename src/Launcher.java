@@ -45,8 +45,13 @@ public class Launcher {
 		/**********************************************
 		 * You can use this to test 3PC configurations.
 		 *********************************************/
-		//test3PC();
-
+		//test3PC(3);
+		
+		/**********************************************
+		 * You can use this to test Keep Alive functionality.
+		 *********************************************/
+		//testKeepAlive(3);
+		
 		System.out.println("Input commands to control 3PC flow:");
 		
 		Scanner scanner = new Scanner(System.in);
@@ -149,6 +154,29 @@ public class Launcher {
 		}
 	}
 	
+	private static void test3PC(Integer numProcesses)
+	{
+		createProcesses(numProcesses);
+		processes.get(0).start(0);
+	}
+	
+	private static void testKeepAlive(Integer numProcesses) throws InterruptedException
+	{
+		createProcesses(numProcesses);
+		Thread.sleep(3000);
+		threads.get(0).stop();
+		Thread.sleep(1000);
+		revive(0);
+	}
+	
+	private static void revive(Integer id)
+	{
+		Process3PC r = new Process3PC(id, netControllers.get(id), numProcesses);
+		Thread d = new Thread(r);
+		d.start();
+		threads.set(id, d);
+		processes.set(id, r);
+	}
 	
 	/**
 	 * Creates the specified number of "processes" (threads). For each
