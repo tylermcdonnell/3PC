@@ -114,7 +114,7 @@ public class Process3PC implements Runnable {
 		this.protocolSendQueue		= new LinkedList<Action>();
 		this.recvKeepAlive			= new LinkedList<KeepAlive>();
 		this.transactions 			= new Hashtable<Integer, Transaction>();
-		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 1000, 250);
+		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 2000, 250);
 		this.messageCount 			= 0;
 		this.haltCount    			= Integer.MAX_VALUE;
 	}
