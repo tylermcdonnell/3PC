@@ -3,12 +3,16 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.concurrent.Semaphore;
 
 import framework.Config;
 import framework.NetController;
 
 public class Launcher {
 
+	// Semaphore for using stdout in process code.
+	public static Semaphore printSem = new Semaphore(1);
+	
 	// A list of all thread handles.
 	public static ArrayList<Thread> threads = new ArrayList<Thread>();
 	
