@@ -40,6 +40,7 @@ public class Launcher {
 	private static final String EXIT_CMD = "e";
 	private static final String SLEEP_CMD = "s";
 	private static final String USE_SCRIPT = "script";
+	private static final String TPC = "3pc";
 	
 	// Number of processes we choose to create for this execution.
 	public static int numProcesses;
@@ -122,11 +123,16 @@ public class Launcher {
 		} 
 		else if (command.equals(PARTIAL_MESSAGE_CMD)) 
 		{	
-			System.out.println("Process " + parameters[0] + " will send " + parameters[1] + " messages then stop.");	
+			Integer process = Integer.valueOf(parameters[0]);
+			Integer messages = Integer.valueOf(parameters[1]);
+			processes.get(process).haltAfter(messages);
+			System.out.println("Process " + process + " will send " + messages + " messages then stop.");	
 		} 
 		else if (command.equals(RESUME_MESSAGES_CMD))
 		{
-			System.out.println("Process " + parameters[0] + " will resume sending messages.");	
+			Integer process = Integer.valueOf(parameters[0]);
+			processes.get(process).resumeMessages();
+			System.out.println("Process " + process + " will resume sending messages.");	
 		} 
 		else if (command.equals(ALL_CLEAR_CMD)) 
 		{	
@@ -154,6 +160,11 @@ public class Launcher {
 		else if (command.equals(USE_SCRIPT))
 		{
 			runScript(parameters[0]);
+		}
+		else if (command.equals(TPC))
+		{
+			// Command to help test 3PC until we get playlist commands up.
+			processes.get(0).start(0);
 		}
 		else 
 		{
