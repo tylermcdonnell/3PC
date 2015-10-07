@@ -27,9 +27,9 @@ public class Yes extends Action implements Serializable {
 	 * Constructor
 	 * @param participants processes involved in this 3PC transaction
 	 */
-	public Yes(Integer transactionID, Integer senderID, String message, Collection<Integer> participants)
+	public Yes(Integer transactionID, Integer senderID, Integer destinationID, String message, Collection<Integer> participants)
 	{
-		super(transactionID, senderID);
+		super(transactionID, senderID, destinationID);
 		this.participants = new ArrayList<Integer>(participants);
 	}
 	
