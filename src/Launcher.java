@@ -12,6 +12,9 @@ public class Launcher {
 	// A list of all thread handles.
 	public static ArrayList<Thread> threads = new ArrayList<Thread>();
 	
+	// A list of the process objects underlying the thread handles.
+	public static ArrayList<Process3PC> processes = new ArrayList<Process3PC>();
+	
 	// A list of all net controllers (corresponding to the same element in
 	// the threads list).
 	public static ArrayList<NetController> netControllers = new ArrayList<NetController>();
@@ -39,6 +42,11 @@ public class Launcher {
 	
 	public static void main(String args[]) throws Exception
 	{
+		/**********************************************
+		 * You can use this to test 3PC configurations.
+		 *********************************************/
+		//test3PC();
+
 		System.out.println("Input commands to control 3PC flow:");
 		
 		Scanner scanner = new Scanner(System.in);
@@ -158,12 +166,15 @@ public class Launcher {
 			NetController nc = createNetController(i);
 			
 			// Pass in "i" as the process number for this process.
-			Runnable r = new Process3PC(i, nc, numProcesses);
+			Process3PC r = new Process3PC(i, nc, numProcesses);
 			Thread d = new Thread(r);
 			d.start();
 			
 			// Add to our list of threads.
 			threads.add(d);
+			
+			// Add to our list of processes.
+			processes.add(r);
 		}
 	}
 	

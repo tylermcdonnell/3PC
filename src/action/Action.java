@@ -23,5 +23,6 @@ public class Action implements Serializable {
 	{
 		this.transactionID = transactionID;
 		this.senderID = senderID;
+		this.destinationID = destinationID;
 	}
 }

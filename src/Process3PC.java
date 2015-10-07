@@ -19,11 +19,21 @@ public class Process3PC implements Runnable {
 		ThreePC.Role role;
 		ThreePC.State state;
 		
+		// Used to count votes if the process if the coordinator of transaction.
+		Integer voteCount;
+		Integer yesCount;
+		
+		// Used to count ACKs
+		Integer ackCount;
+		
 		Transaction(Integer transactionId, ThreePC.Role role, ThreePC.State state)
 		{
-			this.id = transactionId;
-			this.role = role;
-			this.state = state;
+			this.id 		= transactionId;
+			this.role 		= role;
+			this.state 		= state;		
+			this.yesCount 	= 0;
+			this.voteCount  = 0;
+			this.ackCount   = 0;
 		}
 	}
 	
@@ -62,6 +72,9 @@ public class Process3PC implements Runnable {
 	// This process's id
 	private Integer id = 0;
 	
+	// Total number of processes (including this process).
+	private Integer numProcesses;
+	
 	// Used to monitor the life of all processes via Keep-Alives.
 	private ProcessMonitor monitor;
 	
@@ -91,12 +104,25 @@ public class Process3PC implements Runnable {
 	 */
 	public Process3PC(Integer id, NetController network, Integer numProcs)
 	{
-		this.id 			= id;
-		this.network 		= network;
-		//this.dtLog 		= new TransactionLog(true, logName);
-		
-		this.messageCount 	= 0;
-		this.haltCount    	= Integer.MAX_VALUE;
+		this.id 					= id;
+		this.numProcesses			= numProcs;
+		this.network 				= network;
+		this.dtLog 					= new TransactionLog(true, "process" + this.id.toString() + ".log");
+		this.protocolRecvQueue 		= new LinkedList<Action>();
+		this.protocolSendQueue		= new LinkedList<Action>();
+		this.recvKeepAlive			= new LinkedList<KeepAlive>();
+		this.transactions 			= new Hashtable<Integer, Transaction>();
+		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 0, 0);
+		this.messageCount 			= 0;
+		this.haltCount    			= Integer.MAX_VALUE;
+	}
+	
+	public synchronized void start(Integer transactionId)
+	{
+		synchronized(this.protocolRecvQueue)
+		{
+			this.protocolRecvQueue.add(new BeginProtocol(transactionId, this.id, this.id));
+		}
 	}
 	
 	/**
@@ -133,13 +159,16 @@ public class Process3PC implements Runnable {
 			if(!this.halted)
 			{
 				// Process all received messages.
-				for(Iterator<Action> i = this.protocolRecvQueue.iterator(); i.hasNext();)
+				synchronized(this.protocolRecvQueue)
 				{
-					Action a = i.next();
-					i.remove();
-					handle(a);
+					for(Iterator<Action> i = this.protocolRecvQueue.iterator(); i.hasNext();)
+					{
+						Action a = i.next();
+						i.remove();
+						handle(a);
+					}
 				}
-				
+
 				// TODO: Report timeouts (dead) for all transactions applicable.
 				
 				// Send all outgoing messages, constrained by haltCount
@@ -207,16 +236,30 @@ public class Process3PC implements Runnable {
 	 */
 	public void handle(Action action)
 	{
-		System.out.println("Process " + this.id + " receives: " + action.toString());
+		System.out.println(action.transactionID + ": Process " + this.id + " receives [" + action.toString() + "] from Process " + action.senderID);
 		Transaction transaction = transactions.get(action.transactionID);
 		if(transaction == null)
 		{
-			createTransaction(action.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted);
+			transaction = createTransaction(action.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted);
+		}
+		
+		// Controller selected this process to begin 3PC as coordinator.
+		if (action instanceof BeginProtocol)
+		{
+			start3PC((BeginProtocol)action);
 		}
 		
 		if (transaction.state == ThreePC.State.Aborted)
 		{
-			if (action instanceof Start3PC)
+			if (action instanceof Yes && transaction.role == ThreePC.Role.Coordinator)
+			{
+				countVote(transaction, Decide.Yes);
+			}
+			else if (action instanceof Abort && transaction.role == ThreePC.Role.Coordinator)
+			{
+				countVote(transaction, Decide.No);
+			}
+			else if (action instanceof Start3PC)
 			{
 				vote((Start3PC)action);
 			}
@@ -238,6 +281,10 @@ public class Process3PC implements Runnable {
 			{
 				commit(transaction.id);
 			}
+			else if (action instanceof Ack && transaction.role == ThreePC.Role.Coordinator)
+			{
+				processAck(transaction);
+			}
 		}
 		else if (transaction.state == ThreePC.State.Committed)
 		{
@@ -256,16 +303,18 @@ public class Process3PC implements Runnable {
 	 * @param initialRole	Coordinator or Participant
 	 * @param initialState	Aborted, Uncertain, Committable, or Committed
 	 */
-	private void createTransaction(Integer transactionId, ThreePC.Role initialRole, ThreePC.State initialState)
+	private Transaction createTransaction(Integer transactionId, ThreePC.Role initialRole, ThreePC.State initialState)
 	{
+		Transaction t = new Transaction(transactionId, initialRole, initialState);
 		try
 		{
-			this.transactions.put(transactionId, new Transaction(transactionId, initialRole, initialState));
+			this.transactions.put(transactionId, t);
+			return t;
 		}
 		catch (Exception ex)
 		{
-			// This really shouldn't ever happen. Maybe just fail here.
-			throw ex;
+			System.out.println("ERROR: while trying to create a new transaction.");
+			return t;
 		}
 	}
 	
@@ -306,6 +355,40 @@ public class Process3PC implements Runnable {
 	}
 	
 	/**
+	 * Returns a collection of all IDs in range (0, numProcesses).
+	 */
+	private Collection<Integer> getListOfAllProcesses()
+	{
+		Collection<Integer> list = new LinkedList<Integer>();
+		for(int i = 0; i < this.numProcesses; i++)
+		{
+			list.add(i);
+		}
+		return list;
+	}
+	
+	private void start3PC(BeginProtocol action)
+	{
+		Collection<Integer> participants = getListOfAllProcesses();
+		
+		// Controller has selected this process to be coordinator.
+		updateState(action.transactionID, ThreePC.State.Aborted);
+		updateRole(action.transactionID, ThreePC.Role.Coordinator);
+		
+		// Log START3PC.
+		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants));
+		
+		// Send VOTE-REQ to all processes.		
+		for (int i = 0; i < this.numProcesses; i++)
+		{
+			if (i != this.id)
+			{
+				send(new Start3PC(action.transactionID, this.id, i, "", participants));
+			}
+		}
+	}
+	
+	/**
 	 * Upon receipt of PRECOMMIT, advance state to COMMITTABLE
 	 * and send an ACK to the coordinator.
 	 * @param transaction
@@ -314,6 +397,50 @@ public class Process3PC implements Runnable {
 	{
 		updateState(action.transactionID, ThreePC.State.Committable);
 		send(new Ack(action.transactionID, this.id, action.senderID, ""));
+	}
+	
+	private void countVote(Transaction transaction, Decide vote)
+	{
+		transaction.voteCount += 1;
+		
+		if (vote == Decide.Yes)
+		{
+			transaction.yesCount += 1;
+		}
+		
+		// All participants have voted.
+		if (transaction.voteCount == this.numProcesses - 1)
+		{
+			endVoting(transaction);
+		}
+	}
+	
+	private void endVoting(Transaction transaction)
+	{
+		// If all participants voted YES, PRECOMMIT and send PRECOMMIT to all.
+		if (transaction.yesCount == this.numProcesses - 1)
+		{
+			updateState(transaction.id, ThreePC.State.Committable);
+			for(int i = 0; i < this.numProcesses; i++)
+			{
+				if (i !=  this.id)
+				{
+					send(new Precommit(transaction.id, this.id, i, ""));
+				}
+			}
+		}
+		// Else, ABORT and send ABORT to all.
+		else
+		{
+			abort(transaction.id);
+			for(int i = 0; i < this.numProcesses; i++)
+			{
+				if (i != this.id);
+				{
+					send(new Abort(transaction.id, this.id, i, ""));
+				}
+			}
+		}
 	}
 	
 	/**
@@ -369,12 +496,29 @@ public class Process3PC implements Runnable {
 		send(new Abort(start3PC.transactionID, this.id, start3PC.senderID, ""));
 	}
 	
+	private void processAck(Transaction transaction)
+	{
+		transaction.ackCount += 1;
+		if (transaction.ackCount == this.numProcesses - 1)
+		{
+			commit(transaction.id);
+			
+			for(int i = 0; i < this.numProcesses; i++)
+			{
+				if (i != this.id)
+				{
+					send(new Commit(transaction.id, this.id, i, ""));	
+				}
+			}
+		}
+	}
+	
 	/**
 	 * Sends current state in response to a STATE-REQ.
 	 * @param request The STATE-REQ.
 	 */
 	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request)
-	{		
+	{
 		send(new StateResponse(request.transactionID, this.id, request.senderID, state, role, ""));
 	}
 	
@@ -385,6 +529,7 @@ public class Process3PC implements Runnable {
 	private void commit(Integer transactionId)
 	{
 		dtLog.log(new Commit(transactionId, this.id, this.id, ""));
+		System.out.println(transactionId + ": COMMIT by process " + this.id);
 		updateState(transactionId, ThreePC.State.Committed);
 	}
 	
@@ -395,6 +540,7 @@ public class Process3PC implements Runnable {
 	private void abort(Integer transactionId)
 	{
 		dtLog.log(new Abort(transactionId, this.id, this.id, ""));
+		System.out.println(transactionId + ": ABORT by process " + this.id);
 		updateState(transactionId, ThreePC.State.Aborted);
 	}
 }

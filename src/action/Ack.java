@@ -18,7 +18,7 @@ public class Ack extends Action implements Serializable {
 	
 	@Override
 	public String toString() {
-		return "COMMIT: " + this.message;
+		return "ACK: " + this.message;
 	}
 
 	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message)
