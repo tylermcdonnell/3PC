@@ -226,23 +226,20 @@ public class Process3PC implements Runnable {
 	{
 		while(true)
 		{
-			// Pull all messages from network and filter.
-			// Get message from sockets.
+			// Receive all messages from the network and filter them into Keep-Alive and
+			// protocol queues.
 			receiveAll();
 			
-			//******************************************************************
-			//* Keep alive stuff.
-			//******************************************************************
-			
 			// Update statuses of processes with received keep-alive messages.
-			Collection<Integer> deadProcesses = monitor.monitor(recvKeepAlive);	
+			// Get processes that are currently dead.
+			Collection<Integer> deadProcesses = monitor.monitor(recvKeepAlive);
 			
 			//******************************************************************
 			//* Below is protocol only (no keep-alive stuff).
 			//******************************************************************
 			
-			// A process is halted if you give a sendPartial command.
-			if(!this.halted)
+			// A process is halted if and only if it is given a sendPartial command.
+			if (!this.halted)
 			{
 				// Process all received messages.
 				synchronized(this.protocolRecvQueue)
