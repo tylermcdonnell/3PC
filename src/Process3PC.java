@@ -3,6 +3,8 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+
 import action.*;
 import framework.NetController;
 import log.TransactionLog;
@@ -169,7 +171,17 @@ public class Process3PC implements Runnable {
 					}
 				}
 
-				// TODO: Report timeouts (dead) for all transactions applicable.
+				// Report TIMEOUT from this process for all transactions.
+				for(Iterator<Integer> pi = deadProcesses.iterator(); pi.hasNext();)
+				{
+					Integer deadProcess = pi.next();
+					for(Iterator<Map.Entry<Integer, Transaction>> ti = this.transactions.entrySet().iterator(); ti.hasNext();)
+					{
+						Map.Entry<Integer, Transaction> entry = ti.next();
+						Integer transactionId = entry.getKey();
+						handle(new Timeout(transactionId, deadProcess, this.id));
+					}
+				}
 				
 				// Send all outgoing messages, constrained by haltCount
 				sendAll();

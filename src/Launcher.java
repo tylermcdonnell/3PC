@@ -64,6 +64,7 @@ public class Launcher {
 			String[] tokens = command.split(" ");
 			String firstToken = tokens[0];
 			
+			
 			if (firstToken.equals(ADD_CMD)) {
 				
 				System.out.println("Adding <" + tokens[1] + ", " + tokens[2] + ">.");
