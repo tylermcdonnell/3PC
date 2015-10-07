@@ -1,7 +1,10 @@
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Scanner;
 
 import framework.Config;
@@ -36,6 +39,7 @@ public class Launcher {
 	private static final String REJECT_NEXT_CHANGE_CMD = "rejectNextChange";
 	private static final String EXIT_CMD = "e";
 	private static final String SLEEP_CMD = "s";
+	private static final String USE_SCRIPT = "script";
 	
 	// Number of processes we choose to create for this execution.
 	public static int numProcesses;
@@ -58,116 +62,136 @@ public class Launcher {
 		
 		while (true)
 		{
-			String command = scanner.nextLine();
+			String input = scanner.nextLine();
 			
 			// Break up this command into tokens.
-			String[] tokens = command.split(" ");
-			String firstToken = tokens[0];
+			String[] tokens 	= input.split(" ");
+			String command 		= tokens[0];
+			String[] parameters = Arrays.copyOfRange(tokens, 1, tokens.length);
 			
-			
-			if (firstToken.equals(ADD_CMD)) {
-				
-				System.out.println("Adding <" + tokens[1] + ", " + tokens[2] + ">.");
-				
-			} else if (firstToken.equals(REMOVE_CMD)) {
-				
-				System.out.println("Removing <" + tokens[1] + ">.");
-			
-			} else if (firstToken.equals(EDIT_CMD)) {
-				
-				System.out.println("Editting <" + tokens[1] + ", ?> to  <" + tokens[2] + ", " + tokens[3] + ">.");
-				
-			} else if (firstToken.equals(CREATE_PROCESSES_CMD)) {
-				
-				System.out.println("Creating " + tokens[1] + " \"processes.\"");
-				createProcesses(Integer.valueOf(tokens[1]));
-				
-			} else if (firstToken.equals(KILL_CMD)) {
-				
-				// Note: kill should spin-wait on the status of the thread to be
-				// terminated
-				
-				System.out.println("Killing process " + tokens[1] + ".");
-				
-			} else if (firstToken.equals(KILL_ALL_CMD)) {
-				
-				// This would be a total failure? this isn't allowed?
-				
-				System.out.println("Killing all processes.");
-				
-			} else if (firstToken.equals(KILL_LEADER_CMD)) {
-				
-				System.out.println("Killing the leader.");
-				
-			} else if (firstToken.equals(REVIVE_CMD)) {
-				
-				System.out.println("Reviving process " + tokens[1] + ".");
-				
-			} else if (firstToken.equals(REVIVE_LAST_CMD)) {
-				
-				System.out.println("Reviving last killed process.");
-				
-			} else if (firstToken.equals(REVIVE_ALL_CMD)) {
-				
-				System.out.println("Reviving all processes.");
-				
-			} else if (firstToken.equals(PARTIAL_MESSAGE_CMD)) {
-				
-				System.out.println("Process " + tokens[1] + " will send " + tokens[2] + " messages then stop.");
-				
-			} else if (firstToken.equals(RESUME_MESSAGES_CMD)) {
-				
-				System.out.println("Process " + tokens[1] + " will resume sending messages.");
-				
-			} else if (firstToken.equals(ALL_CLEAR_CMD)) {
-				
-				System.out.println("allClear was called.");
-				
-			} else if (firstToken.equals(REJECT_NEXT_CHANGE_CMD)) {
-				
-				System.out.println("Process " + tokens[1] + " will reject next change.");
-				
-			} else if (firstToken.equals(EXIT_CMD)) {
-				
-				System.out.println("Exting after closing all net controllers.");
-				
-				for (int i = 0; i < netControllers.size(); i++) {
-					netControllers.get(i).shutdown();
-				}
-				
-				System.exit(-1);
-			}
-			else if (firstToken.equals(SLEEP_CMD)) {
-				
-				System.out.print("Sleeping for " + tokens[1] + " seconds.");
-				sleep(Integer.parseInt(tokens[1]));
-				
-			} else {
-				
-				System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
-				
-				for (int i = 0; i < netControllers.size(); i++) {
-					netControllers.get(i).shutdown();
-				}
-				
-				System.exit(-1);
-			}
+			execute(command, parameters);
 		}
 	}
 	
-	private static void test3PC(Integer numProcesses)
+	private static void execute(String command, String[] parameters) throws InterruptedException
 	{
-		createProcesses(numProcesses);
-		processes.get(0).start(0);
-	}
+		if (command.equals(ADD_CMD)) 
+		{
+			System.out.println("Adding <" + parameters[0] + ", " + parameters[1] + ">.");
+		} 
+		else if (command.equals(REMOVE_CMD)) 
+		{
+			System.out.println("Removing <" + parameters[0] + ">.");
+		}
+		else if (command.equals(EDIT_CMD)) 
+		{
+			System.out.println("Editting <" + parameters[0] + ", ?> to  <" + parameters[1] + ", " + parameters[2] + ">.");
+		}
+		else if (command.equals(CREATE_PROCESSES_CMD)) 
+		{		
+			System.out.println("Creating " + parameters[0] + " \"processes.\"");
+			createProcesses(Integer.valueOf(parameters[0]));
+		} 
+		else if (command.equals(KILL_CMD))
+		{	
+			// Note: kill should spin-wait on the status of the thread to be
+			// terminated
+			System.out.println("Killing process " + parameters[0] + ".");
+		} 
+		else if (command.equals(KILL_ALL_CMD)) 
+		{
+		
+			// This would be a total failure? this isn't allowed?	
+			System.out.println("Killing all processes.");	
+		} 
+		else if (command.equals(KILL_LEADER_CMD)) 
+		{
+			System.out.println("Killing the leader.");		
+		} 
+		else if (command.equals(REVIVE_CMD)) 
+		{
+			System.out.println("Reviving process " + parameters[0] + ".");
+		} 
+		else if (command.equals(REVIVE_LAST_CMD)) 
+		{		
+			System.out.println("Reviving last killed process.");		
+		} 
+		else if (command.equals(REVIVE_ALL_CMD)) 
+		{		
+			System.out.println("Reviving all processes.");		
+		} 
+		else if (command.equals(PARTIAL_MESSAGE_CMD)) 
+		{	
+			System.out.println("Process " + parameters[0] + " will send " + parameters[1] + " messages then stop.");	
+		} 
+		else if (command.equals(RESUME_MESSAGES_CMD))
+		{
+			System.out.println("Process " + parameters[0] + " will resume sending messages.");	
+		} 
+		else if (command.equals(ALL_CLEAR_CMD)) 
+		{	
+			System.out.println("allClear was called.");	
+		} 
+		else if (command.equals(REJECT_NEXT_CHANGE_CMD)) 
+		{
+			System.out.println("Process " + parameters[0] + " will reject next change.");
+		} 
+		else if (command.equals(EXIT_CMD)) 
+		{
+			System.out.println("Exting after closing all net controllers.");
+			
+			for (int i = 0; i < netControllers.size(); i++) {
+				netControllers.get(i).shutdown();
+			}
+			
+			System.exit(-1);
+		}
+		else if (command.equals(SLEEP_CMD)) 
+		{	
+			System.out.print("Sleeping for " + parameters[0] + " seconds.");
+			sleep(Integer.parseInt(parameters[0]));
+		}
+		else if (command.equals(USE_SCRIPT))
+		{
+			runScript(parameters[0]);
+		}
+		else 
+		{
+			System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
+			
+			for (int i = 0; i < netControllers.size(); i++) 
+			{
+				netControllers.get(i).shutdown();
+			}
 	
-	private static void testKeepAlive(Integer numProcesses) throws InterruptedException
+			System.exit(-1);
+		}
+	}
+
+	private static void runScript(String filename)
 	{
-		createProcesses(numProcesses);
-		Thread.sleep(3000);
-		threads.get(0).stop();
-		Thread.sleep(1000);
-		revive(0);
+		try (BufferedReader br = new BufferedReader(new FileReader(filename))) 
+		{
+		    String line;
+		    while ((line = br.readLine()) != null) 
+		    {
+		    	if (line.startsWith("/"))
+		    	{
+		    		continue;
+		    	}
+		    	
+				String[] tokens 	= line.split(" ");
+				String command 		= tokens[0];
+				String[] parameters = Arrays.copyOfRange(tokens, 1, tokens.length);
+				
+				execute(command, parameters);
+		    }
+		}
+		catch (Exception exc)
+		{
+			System.out.println("Error while running script.");
+			exc.printStackTrace();
+		}
 	}
 	
 	private static void revive(Integer id)
@@ -270,7 +294,6 @@ public class Launcher {
 		return nc;
 	}
 	
-	
 	/**
 	 * Sleep the main thread for the specified number of seconds.
 	 * 
@@ -282,6 +305,25 @@ public class Launcher {
 		
 		// Note: sleep takes an argument in milliseconds.
 		Thread.sleep(numSeconds * 1000);
+	}
+	
+	/**********************************************************************
+	 * TEST METHODS             
+	 **********************************************************************/
+	
+	private static void test3PC(Integer numProcesses)
+	{
+		createProcesses(numProcesses);
+		processes.get(0).start(0);
+	}
+
+	private static void testKeepAlive(Integer numProcesses) throws InterruptedException
+	{
+		createProcesses(numProcesses);
+		Thread.sleep(3000);
+		threads.get(0).stop();
+		Thread.sleep(1000);
+		revive(0);
 	}
 }
 
