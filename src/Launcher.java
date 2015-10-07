@@ -99,16 +99,13 @@ public class Launcher {
 		} 
 		else if (command.equals(KILL_CMD))
 		{	
-			// Note: kill should spin-wait on the status of the thread to be
-			// terminated
 			System.out.println("Killing process " + parameters[0] + ".");
 			kill(Integer.valueOf(parameters[0]));
 		} 
 		else if (command.equals(KILL_ALL_CMD)) 
 		{
-		
-			// This would be a total failure? this isn't allowed?	
-			System.out.println("Killing all processes.");	
+			System.out.println("Killing all processes.");
+			killAll();
 		} 
 		else if (command.equals(KILL_LEADER_CMD)) 
 		{
@@ -211,20 +208,52 @@ public class Launcher {
 		}
 	}
 	
+	
+	/**
+	 * Kill the thread with the given id.
+	 * 
+	 * @param id, the given id.
+	 */
 	private static void kill(Integer id)
 	{
-		System.out.println("CONTROLLER: killed process " + id);
 		threads.get(id).stop();
+		
+		// Spin-wait for process to become "TERMINATED."
+		while (!threads.get(id).getState().equals("TERMINATED")) {
+		}
+		
+		System.out.println("CONTROLLER: killed process " + id);
 	}
 	
+	
+	/**
+	 * Kill all threads.
+	 */
+	private static void killAll()
+	{	
+		for (int i = 0; i < threads.size(); i++) {
+			kill(i);
+		}
+	}
+	
+	
+	/**
+	 * Revive the thread with the given id.
+	 * 
+	 * @param id, the given id.
+	 */
 	private static void revive(Integer id)
 	{
+		// Note: use same NetController object as the previously killed thread.
 		Process3PC r = new Process3PC(id, netControllers.get(id), numProcesses, false);
+		
 		Thread d = new Thread(r);
 		d.start();
+		
 		threads.set(id, d);
 		processes.set(id, r);
 	}
+	
 	
 	/**
 	 * Creates the specified number of "processes" (threads). For each
@@ -317,6 +346,7 @@ public class Launcher {
 		return nc;
 	}
 	
+	
 	/**
 	 * Sleep the main thread for the specified number of seconds.
 	 * 
@@ -330,6 +360,7 @@ public class Launcher {
 		Thread.sleep(numSeconds * 1000);
 	}
 	
+	
 	/**********************************************************************
 	 * TEST METHODS             
 	 **********************************************************************/
@@ -340,6 +371,7 @@ public class Launcher {
 		processes.get(0).start(0);
 	}
 
+	@SuppressWarnings("deprecation")
 	private static void testKeepAlive(Integer numProcesses) throws InterruptedException
 	{
 		createProcesses(numProcesses);
