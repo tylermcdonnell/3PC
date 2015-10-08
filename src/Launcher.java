@@ -26,6 +26,9 @@ public class Launcher {
 	// A list of all net controllers (corresponding to the same element in
 	// the threads list).
 	public static ArrayList<NetController> netControllers = new ArrayList<NetController>();
+	
+	// The transaction ID to use for the next transaction.
+	private static Integer nextTransID = 0;
 
 	// Configure commands.
 	private static final String ADD_CMD = "add";
@@ -65,7 +68,7 @@ public class Launcher {
 		/**********************************************
 		 * You can use this to test Playlist printing functionality.
 		 *********************************************/
-		// testPlaylistPrint(4);
+		//testPlaylistPrintScript();
 
 		System.out.println("Input commands to control 3PC flow:");
 
@@ -85,69 +88,134 @@ public class Launcher {
 
 	private static void execute(String command, String[] parameters) throws InterruptedException {
 		//System.out.println(command);
-		if (command.equals(ADD_CMD)) {
+		if (command.equals(ADD_CMD))
+		{
 			System.out.println("Adding <" + parameters[0] + ", " + parameters[1] + ">.");
-		} else if (command.equals(REMOVE_CMD)) {
+			
+			ArrayList<String> cmd = new ArrayList<String>();
+			cmd.add("Add");
+			cmd.add(parameters[0]);
+			cmd.add(parameters[1]);
+			PlaylistAction pa = new PlaylistAction(cmd);
+			
+			processes.get(0).start(nextTransID, pa);
+			
+			// Don't reuse this trans ID.
+			nextTransID++;
+		} 
+		else if (command.equals(REMOVE_CMD)) 
+		{
 			System.out.println("Removing <" + parameters[0] + ">.");
-		} else if (command.equals(EDIT_CMD)) {
-			System.out
-					.println("Editting <" + parameters[0] + ", ?> to  <" + parameters[1] + ", " + parameters[2] + ">.");
-		} else if (command.equals(CREATE_PROCESSES_CMD)) {
+			
+			ArrayList<String> cmd = new ArrayList<String>();
+			cmd.add("Delete");
+			cmd.add(parameters[0]);
+			PlaylistAction pa = new PlaylistAction(cmd);
+			
+			processes.get(0).start(nextTransID, pa);
+			
+			// Don't reuse this trans ID.
+			nextTransID++;
+		}
+		else if (command.equals(EDIT_CMD)) 
+		{
+			System.out.println("Editting <" + parameters[0] + ", ?> to  <" + 
+					parameters[1] + ", " + parameters[2] + ">.");
+			
+			ArrayList<String> cmd = new ArrayList<String>();
+			cmd.add("Edit");
+			cmd.add(parameters[0]);
+			cmd.add(parameters[1]);
+			cmd.add(parameters[2]);
+			PlaylistAction pa = new PlaylistAction(cmd);
+			
+			processes.get(0).start(nextTransID, pa);
+			
+			// Don't reuse this trans ID.
+			nextTransID++;
+		} 
+		else if (command.equals(CREATE_PROCESSES_CMD)) {
 			System.out.println("Creating " + parameters[0] + " \"processes.\"");
 			createProcesses(Integer.valueOf(parameters[0]));
-		} else if (command.equals(KILL_CMD)) {
+		} 
+		else if (command.equals(KILL_CMD)) 
+		{
 			System.out.println("Killing process " + parameters[0] + ".");
 			kill(Integer.valueOf(parameters[0]));
-		} else if (command.equals(KILL_ALL_CMD)) {
+		} 
+		else if (command.equals(KILL_ALL_CMD)) 
+		{
 			System.out.println("Killing all processes.");
 			killAll();
-		} else if (command.equals(KILL_LEADER_CMD)) {
+		} 
+		else if (command.equals(KILL_LEADER_CMD)) 
+		{
 			System.out.println("Killing the leader.");
-		} else if (command.equals(REVIVE_CMD)) {
+		} 
+		else if (command.equals(REVIVE_CMD)) 
+		{
 			System.out.println("Reviving process " + parameters[0] + ".");
 			revive(Integer.valueOf(parameters[0]));
-		} else if (command.equals(REVIVE_LAST_CMD)) {
+		} 
+		else if (command.equals(REVIVE_LAST_CMD)) 
+		{
 			System.out.println("Reviving last killed process.");
-		} else if (command.equals(REVIVE_ALL_CMD)) {
+		} 
+		else if (command.equals(REVIVE_ALL_CMD)) 
+		{
 			System.out.println("Reviving all processes.");
-		} else if (command.equals(PARTIAL_MESSAGE_CMD)) {
+		} 
+		else if (command.equals(PARTIAL_MESSAGE_CMD)) 
+		{
 			Integer process = Integer.valueOf(parameters[0]);
 			Integer messages = Integer.valueOf(parameters[1]);
 			processes.get(process).haltAfter(messages);
 			System.out.println("Process " + process + " will send " + messages + " messages then stop.");
-		} else if (command.equals(RESUME_MESSAGES_CMD)) {
+		} 
+		else if (command.equals(RESUME_MESSAGES_CMD)) 
+		{
 			Integer process = Integer.valueOf(parameters[0]);
 			processes.get(process).resumeMessages();
 			System.out.println("Process " + process + " will resume sending messages.");
-		} else if (command.equals(ALL_CLEAR_CMD)) {
+		} 
+		else if (command.equals(ALL_CLEAR_CMD)) 
+		{
 			System.out.println("allClear was called.");
-		} else if (command.equals(REJECT_NEXT_CHANGE_CMD)) {
+		} 
+		else if (command.equals(REJECT_NEXT_CHANGE_CMD)) 
+		{
 			System.out.println("Process " + parameters[0] + " will reject next change.");
 			rejectNextChange(Integer.valueOf(parameters[0]));
-		} else if (command.equals(EXIT_CMD)) {
-			System.out.println("Exting after closing all net controllers.");
+		} 
+		else if (command.equals(EXIT_CMD)) 
+		{
+			System.out.println("Exiting after closing all net controllers.");
 
 			for (int i = 0; i < netControllers.size(); i++) {
 				netControllers.get(i).shutdown();
 			}
 
 			System.exit(-1);
-		} else if (command.equals(SLEEP_CMD)) {
+		} 
+		else if (command.equals(SLEEP_CMD)) 
+		{
 			System.out.print("Sleeping for " + parameters[0] + " seconds.");
 			sleep(Integer.parseInt(parameters[0]));
-		} else if (command.equals(USE_SCRIPT)) {
+		} 
+		else if (command.equals(USE_SCRIPT)) 
+		{
 			runScript(parameters[0]);
-		} else if (command.equals(TPC)) {
-			// Command to help test 3PC until we get playlist commands up.
-			ArrayList<String> action = new ArrayList<String>();
-			action.add("Add");
-			action.add("SongName");
-			action.add("SongURL");
-			PlaylistAction pa = new PlaylistAction(action);
-			processes.get(0).start(0, pa);
-		} else if (command.equals(PRINT_PLAYLISTS_CMD)) {
+		} 
+		else if (command.equals(TPC)) 
+		{
+			// No longer used.
+			System.out.println("No longer used. Please use Add, Edit, or Remove instead.");
+		} 
+		else if (command.equals(PRINT_PLAYLISTS_CMD)) {
 			printPlaylists();
-		} else {
+		} 
+		else 
+		{
 			System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
 
 			for (int i = 0; i < netControllers.size(); i++) {
@@ -163,6 +231,11 @@ public class Launcher {
 			String line;
 			while ((line = br.readLine()) != null) {
 				if (line.startsWith("/")) {
+					continue;
+				}
+				
+				if (line.equals(""))
+				{
 					continue;
 				}
 
@@ -188,8 +261,7 @@ public class Launcher {
 	/**
 	 * Kill the thread with the given id.
 	 * 
-	 * @param id,
-	 *            the given id.
+	 * @param id, the given id.
 	 */
 	private static void kill(Integer id) {
 		threads.get(id).stop();
@@ -221,8 +293,7 @@ public class Launcher {
 	/**
 	 * Revive the thread with the given id.
 	 * 
-	 * @param id,
-	 *            the given id.
+	 * @param id, the given id.
 	 */
 	private static void revive(Integer id) {
 		// Note: use same NetController object as the previously killed thread.
@@ -268,8 +339,7 @@ public class Launcher {
 	 * Creates a NetController for the given process, described by its process
 	 * number.
 	 * 
-	 * @param processNumber,
-	 *            this process' process number.
+	 * @param processNumber, this process' process number.
 	 * 
 	 * @return a NetController for the given process, described by its process
 	 *         number.
@@ -330,11 +400,9 @@ public class Launcher {
 	/**
 	 * Sleep the main thread for the specified number of seconds.
 	 * 
-	 * @param numSeconds,
-	 *            the specified number of seconds.
+	 * @param numSeconds, the specified number of seconds.
 	 * 
-	 * @throws InterruptedException
-	 *             if interrupted while sleeping.
+	 * @throws InterruptedException if interrupted while sleeping.
 	 */
 	private static void sleep(int numSeconds) throws InterruptedException {
 
@@ -368,8 +436,14 @@ public class Launcher {
 		PlaylistAction pa = new PlaylistAction(action);
 		processes.get(0).start(0, pa);
 	}
+	
+	private static void testPlaylistPrintScript()
+	{
+		
+	}
 
 	private static void testPlaylistPrint(Integer numProcesses) throws InterruptedException {
+		
 		createProcesses(numProcesses);
 
 		ArrayList<String> action0 = new ArrayList<String>();
