@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
+import playlist.PlaylistAction;
 import framework.Config;
 import framework.NetController;
 
@@ -45,6 +46,7 @@ public class Launcher {
 	private static final String SLEEP_CMD = "s";
 	private static final String USE_SCRIPT = "script";
 	private static final String TPC = "3pc";
+	private static final String PRINT_PLAYLISTS_CMD = "p";
 	
 	// Number of processes we choose to create for this execution.
 	public static int numProcesses;
@@ -60,6 +62,11 @@ public class Launcher {
 		 * You can use this to test Keep Alive functionality.
 		 *********************************************/
 		//testKeepAlive(3);
+		
+		/**********************************************
+		 * You can use this to test Playlist printing functionality.
+		 *********************************************/
+		testPlaylistPrint(4);
 		
 		System.out.println("Input commands to control 3PC flow:");
 		
@@ -167,10 +174,18 @@ public class Launcher {
 		else if (command.equals(TPC))
 		{
 			// Command to help test 3PC until we get playlist commands up.
-			processes.get(0).start(0);
+			ArrayList<String> action = new ArrayList<String>();
+			action.add("Add");
+			action.add("SongName");
+			action.add("SongURL");
+			PlaylistAction pa = new PlaylistAction(action);
+			processes.get(0).start(0, pa);
 		}
-		else 
+		else if (command.equals(PRINT_PLAYLISTS_CMD))
 		{
+			printPlaylists();
+		}
+		else {
 			System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
 			
 			for (int i = 0; i < netControllers.size(); i++) 
@@ -360,18 +375,99 @@ public class Launcher {
 		Thread.sleep(numSeconds * 1000);
 	}
 	
+	/**
+	 * Prints all process' Playlists in a nice format.
+	 */
+	private static void printPlaylists() {
+		
+		// Print all Playlist logs to compare.
+		System.out.println("\n");
+		for (int i = 0; i < processes.size(); i++) 
+		{
+			processes.get(i).printPlaylist();
+		}
+	}
+	
 	
 	/**********************************************************************
 	 * TEST METHODS             
 	 **********************************************************************/
 	
-	private static void test3PC(Integer numProcesses)
+	private static void test3PC(Integer numProcesses) throws InterruptedException
 	{
 		createProcesses(numProcesses);
-		processes.get(0).start(0);
+		
+		ArrayList<String> action = new ArrayList<String>();
+		action.add("Add");
+		action.add("SongName");
+		action.add("SongURL");
+		PlaylistAction pa = new PlaylistAction(action);
+		processes.get(0).start(0, pa);
+	}
+	
+	private static void testPlaylistPrint(Integer numProcesses) throws InterruptedException
+	{
+		createProcesses(numProcesses);
+		
+		ArrayList<String> action0 = new ArrayList<String>();
+		action0.add("Add");
+		action0.add("Steal My Girl");
+		action0.add("www.youtube.com/SMG");
+		PlaylistAction pa0 = new PlaylistAction(action0);
+		processes.get(0).start(0, pa0);
+		
+		// Wait for commits to be done.
+		Thread.sleep(3000);
+		printPlaylists();
+		
+		ArrayList<String> action1 = new ArrayList<String>();
+		action1.add("Add");
+		action1.add("Where Do Broken Hearts Go?");
+		action1.add("www.youtube.com/WDBHG");
+		PlaylistAction pa1 = new PlaylistAction(action1);
+		processes.get(1).start(1, pa1);
+		
+		// Wait for commits to be done.
+		Thread.sleep(2000);
+		printPlaylists();
+		
+		ArrayList<String> action2 = new ArrayList<String>();
+		action2.add("Edit");
+		action2.add("Steal My Girl");
+		action2.add("Steal My Girl (EDITED)");
+		action2.add("www.youtube.com/SMG (EDITED)");
+		PlaylistAction pa2 = new PlaylistAction(action2);
+		processes.get(3).start(4, pa2);
+		
+		// Wait for commits to be done.
+		Thread.sleep(2000);
+		printPlaylists();
+		
+		ArrayList<String> action3 = new ArrayList<String>();
+		action3.add("Delete");
+		action3.add("Steal My Girl (EDITED)");
+		PlaylistAction pa3 = new PlaylistAction(action3);
+		processes.get(3).start(134, pa3);
+		
+		// Wait for commits to be done.
+		Thread.sleep(2000);
+		printPlaylists();
+		
+		ArrayList<String> action4 = new ArrayList<String>();
+		action4.add("Delete");
+		action4.add("Where Do Broken Hearts Go?");
+		PlaylistAction pa4 = new PlaylistAction(action4);
+		processes.get(2).start(6, pa4);
+		
+		// Wait for commits to be done.
+		Thread.sleep(2000);
+		printPlaylists();
+		
+		System.out.println("\n\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+		System.out.println("PLAYLIST SHOULD BE EMPTY NOW");
+		System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
 	}
 
-	@SuppressWarnings("deprecation")
 	private static void testKeepAlive(Integer numProcesses) throws InterruptedException
 	{
 		createProcesses(numProcesses);
