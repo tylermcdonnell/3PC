@@ -24,7 +24,7 @@ public class Playlist implements Serializable {
 	
 	// A list of transaction IDs corresponding to add/edit/delete events
 	// that were committed to this playlist.
-	ArrayList<Integer> transactionsCompleted;
+	private ArrayList<Integer> transactionsCompleted;
 	
 	/**
 	 * Default constructor.
@@ -136,6 +136,15 @@ public class Playlist implements Serializable {
 	public HashMap<String, String> getPlaylist() {
 		
 		return this.playlistMap;
+	}
+	
+	
+	/**
+	 * Returns a list of transactions completed by this Playlist.
+	 * @return a list of transactions completed by this Playlist.
+	 */
+	public ArrayList<Integer> getTransactionsCompleted() {
+		return this.transactionsCompleted;
 	}
 	
 	/**
