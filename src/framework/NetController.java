@@ -59,8 +59,8 @@ public class NetController {
 		// MIKE: config.addresses[proc] can just be localhost.
 		// MIKE: pulls the port for this new connection from config.ports array.
 		outSockets[proc] = new OutgoingSock(new Socket(config.addresses[proc], config.ports[proc]));
-		config.logger.info(String.format("Server %d: Socket to %d established", 
-				config.procNum, proc));
+		//config.logger.info(String.format("Server %d: Socket to %d established", 
+		//		config.procNum, proc));
 	}
 	
 	/**
