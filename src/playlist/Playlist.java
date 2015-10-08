@@ -1,5 +1,7 @@
 package playlist;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 
@@ -11,11 +13,18 @@ import java.util.HashMap;
  * @author Mike Feilbach
  *
  */
-public class Playlist {
+public class Playlist implements Serializable {
+
+	// Necessary for implementing Serializable correctly.
+	private static final long serialVersionUID = 1L;
 
 	// Each song hashes to its URL. This embodies the entire contents
 	// of a playlist.
 	private HashMap<String, String> playlistMap;
+	
+	// A list of transaction IDs corresponding to add/edit/delete events
+	// that were committed to this playlist.
+	ArrayList<Integer> transactionsCompleted;
 	
 	/**
 	 * Default constructor.
@@ -23,6 +32,7 @@ public class Playlist {
 	public Playlist() {
 		
 		this.playlistMap = new HashMap<String, String>();
+		this.transactionsCompleted = new ArrayList<Integer>();
 	}
 	
 	
@@ -31,10 +41,11 @@ public class Playlist {
 	 * 
 	 * @param songName, the name of the song.
 	 * @param URL, the corresponding URL of the song.
+	 * @param transID, the transaction ID corresponding to this commit event.
 	 * @throws Exception if the song being added already exists in the
 	 * playlist.
 	 */
-	public void add(String songName, String URL) throws Exception {
+	public void add(String songName, String URL, Integer transID) throws Exception {
 		
 		// Make sure we aren't adding a duplicate.
 		if (this.playlistMap.containsKey(songName)) {
@@ -43,6 +54,15 @@ public class Playlist {
 		}
 		
 		this.playlistMap.put(songName, URL);
+		
+		// Add the transaction ID to the list of completed transactions.
+		if (this.transactionsCompleted.contains(transID))
+		{
+			System.out.println("This transaction ID is already in the Playlist! Terminating.");
+			System.exit(-1);
+		}
+		
+		this.transactionsCompleted.add(transID);
 	}
 	
 	
@@ -50,10 +70,11 @@ public class Playlist {
 	 * Deletes an existing song from the playlist.
 	 * 
 	 * @param songName, the name of the song.
+	 * @param transID, the transaction ID corresponding to this commit event.
 	 * @throws Exception if the name of the song is not within
 	 * the playlist.
 	 */
-	public void remove(String songName) throws Exception {
+	public void remove(String songName, Integer transID) throws Exception {
 		
 		// Make sure this song is in our playlist (i.e., it is a key
 		// in our hash map).
@@ -64,6 +85,15 @@ public class Playlist {
 		
 		// The song name (and it's value) is okay to remove.
 		this.playlistMap.remove(songName);
+		
+		// Add the transaction ID to the list of completed transactions.
+		if (this.transactionsCompleted.contains(transID))
+		{
+			System.out.println("This transaction ID is already in the Playlist! Terminating.");
+			System.exit(-1);
+		}
+		
+		this.transactionsCompleted.add(transID);
 	}
 	
 	
@@ -76,10 +106,11 @@ public class Playlist {
 	 * 
 	 * @param newSongName, the new name.
 	 * @param newSongURL, the new URL.
+	 * @param transID, the transaction ID corresponding to this commit event.
 	 * @throws Exception if the playlist does not contain the song
 	 * corresponding to songName.
 	 */
-	public void edit(String songName, String newSongName, String newSongURL) throws Exception {
+	public void edit(String songName, String newSongName, String newSongURL, Integer transID) throws Exception {
 		
 		// Make sure this song is in our playlist (i.e., it is a key
 		// in our hash map).
@@ -92,7 +123,9 @@ public class Playlist {
 		this.playlistMap.remove(songName);
 		
 		// Add a new key, value pair.
-		this.add(newSongName, newSongURL);
+		// NOTE: this method call with insert the given transID into
+		// the transaction ID list -- no need to do it here.
+		this.add(newSongName, newSongURL, transID);
 	}
 	
 	
@@ -110,10 +143,24 @@ public class Playlist {
 	 */
 	public void printPlaylist() {
 		
-		System.out.println("PLAYLIST:");
+		System.out.println("--------------------------------------------------------------------------------");
+		System.out.print("Playlist has completed " + this.transactionsCompleted.size() + " transaction(s): ");
+		
+		// Print all but the last transaction ID.
+		for (int i = 0; i < (this.transactionsCompleted.size() - 1); i++) {
+			System.out.print(this.transactionsCompleted.get(i) + ", ");
+		}
+		
+		// Print last transaction ID.
+		System.out.println(this.transactionsCompleted.get(this.transactionsCompleted.size() - 1));
+		
+		int count = 1;
 		
 		for (String key : this.playlistMap.keySet()) {
-		    System.out.println(key + ", " + this.playlistMap.get(key));
+		    System.out.println(count + ") " + key + ", " + this.playlistMap.get(key));
+		    count++;
 		}
+		
+		System.out.println("--------------------------------------------------------------------------------\n");
 	}
 }
