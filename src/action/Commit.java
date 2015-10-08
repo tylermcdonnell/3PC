@@ -22,7 +22,7 @@ public class Commit extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	public Commit(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
+	public Commit(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
 		super(transactionID, senderID, destinationID, playlistAction);
 	}

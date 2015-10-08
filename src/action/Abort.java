@@ -25,23 +25,19 @@ import playlist.PlaylistAction;
 public class Abort extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-
-	/**
-	 * Message being aborted
-	 */
-	private String message;
 	
-	@Override
-	public String toString() {
-		return "ABORT: " + this.message;
-	}
-
 	/**
 	 * Default constructor.
 	 */
-	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
+	public Abort(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
 		super(transactionID, senderID, destinationID, playlistAction);
-		this.message = message;
 	}
+	
+	@Override
+	public String toString() {
+		return "Abort [senderID=" + senderID + ", destinationID=" + destinationID + ", transactionID=" + transactionID
+				+ ", playlistAction=" + playlistAction + "]";
+	}
+
 }
