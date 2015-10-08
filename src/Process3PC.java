@@ -249,15 +249,76 @@ public class Process3PC implements Runnable {
 	 */
 	private void recover()
 	{
-		// TODO: MIKE: when recovering, if there is a COMMIT in the stable storage
-		// for a specific transaction, make sure that the edit/delete/add was carried
-		// out in the playlistStorage.  At the top of the playlistStorage file
-		// will be a list of transactions which were finished.  We assume that a write
-		// to the playlistStorage log is atomic -- either all or nothing is written. This
-		// is valid given our implementation, because the chances of a write to
-		// stable storage being interrupted by some sort of kill command is negligible.
-		
 		ArrayList<Action> history = this.dtLog.read();
+		
+		//**********************************************************************
+		//* When recovering, if there is a COMMIT in the stable storage
+		//* for a specific transaction, make sure that the edit/delete/add was 
+		//* carried out in the Playlist log. We assume that a write to the 
+		//* Playlist log is atomic -- either all or nothing is written. This is 
+		//* valid given our implementation, because the chances of a write to 
+		//* stable storage being interrupted by some sort of kill command is 
+		//* negligible.
+		//**********************************************************************
+		
+		// (1) Get list of transaction IDs which correspond to COMMITs from the 
+		// transaction Log
+		ArrayList<Integer> logTransIDs = new ArrayList<Integer>();
+		
+		for (int i = 0; i < history.size(); i++)
+		{
+			if (history.get(i) instanceof Commit)
+			{
+				logTransIDs.add(history.get(i).transactionID);
+			}
+		}
+		
+		// (2) Get list of transaction IDs corresponding to transactions which
+		// were carried out in the Playlist log.
+		ArrayList<Integer> playlistTransIDs = this.playlistLog.read().getTransactionsCompleted();
+		
+		// (3) Make sure that all transaction IDs corresponding to commits in the
+		// transaction log are included in the Playlist log. We know that a commit
+		// is written to the transaction log before it is carried out in the 
+		// Playlist log, therefore the set of the Playlist log's transaction IDs is 
+		// always a subset of the transaction log's. Make sure, just in case.
+		if (logTransIDs.size() < playlistTransIDs.size())
+		{
+			System.out.println("Playlist log has more transaction IDs than the"
+					+ " transaction log does. This should never happen. Terminating.");
+			System.exit(-1);
+		}
+		
+		// (4) Find any transaction IDs that are present in the transaction log,
+		// but not in the Playlist log.
+		ArrayList<Integer> transIDsToBeAdded = new ArrayList<Integer>();
+		
+		for (int i = 0; i < logTransIDs.size(); i++)
+		{
+			int currTransID = logTransIDs.get(i);
+			if (!playlistTransIDs.contains(currTransID))
+			{
+				transIDsToBeAdded.add(currTransID);
+			}
+		}
+		
+		// (5) For each transaction ID we have collected, execute the corresponding
+		// transaction's playlist action in the Playlist log. This will bring
+		// consistency between the transaction log and the Playlist log.
+		for (int i = 0; i < transIDsToBeAdded.size(); i++)
+		{
+			int transID = transIDsToBeAdded.get(i);
+			
+			// Get the transaction corresponding to this trans ID.
+			Transaction t = transactions.get(transID);
+			
+			// Execute this transaction in the Playlist log.
+			try {
+				this.playlistLog.log(t.playlistAction.getCommand(), transID);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 		
 		// Load status of each transaction in history. We should be able to 
 	    // simply do this sequentially, since the most recent entry in the
