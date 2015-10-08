@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for an UP log that can be written to stable storage.
  * Rather than containing a set, this simply writes a single value
@@ -19,9 +21,9 @@ public class UP extends Action implements Serializable
 	/**
 	 * Default constructor.
 	 */
-	public UP(Integer transactionID, Integer senderID, Integer destinationID, Integer UP)
+	public UP(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction, Integer UP)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.UP = UP;
 	}
 	

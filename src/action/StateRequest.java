@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for a STATE-REQ message in the 3PC protocol.
  *
@@ -13,10 +15,10 @@ import java.io.Serializable;
 public class StateRequest extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-	
-	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, String message)
+
+	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 	}
 
 	@Override

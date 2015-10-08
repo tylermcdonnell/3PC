@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for an UNCERTAIN message in the 3PC protocol.
  * 
@@ -19,9 +21,9 @@ public class Uncertain extends Action implements Serializable {
 	/**
 	 * Default constructor.
 	 */
-	public Uncertain(Integer transactionID, Integer senderID, Integer destinationID)
+	public Uncertain(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 	}
 
 	@Override

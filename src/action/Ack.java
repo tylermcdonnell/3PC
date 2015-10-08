@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for an ACK message in the 3PC protocol.
  *
@@ -24,9 +26,9 @@ public class Ack extends Action implements Serializable {
 		return "ACK: " + this.message;
 	}
 
-	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.message = message;
 	}
 

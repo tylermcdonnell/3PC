@@ -8,7 +8,10 @@ import java.util.Map;
 
 import action.*;
 import framework.NetController;
+import log.PlaylistLog;
 import log.TransactionLog;
+import playlist.Playlist;
+import playlist.PlaylistAction;
 
 public class Process3PC implements Runnable {
 	
@@ -121,8 +124,11 @@ public class Process3PC implements Runnable {
 	// Buffered list of received keep-alive messages to report to monitor.
 	private LinkedList<KeepAlive> recvKeepAlive;
 	
-	// Stable storage
+	// Stable storage -- 3Pc data.
 	private TransactionLog dtLog;
+	
+	// Stable storage -- Playlist data.
+	private PlaylistLog playlistLog;
 	
 	// This process's id
 	private Integer id = 0;
@@ -163,6 +169,7 @@ public class Process3PC implements Runnable {
 		this.numProcesses			= numProcs;
 		this.network 				= network;
 		this.dtLog 					= new TransactionLog(clearStableStorage, "process" + this.id.toString() + ".log");
+		this.playlistLog            = new PlaylistLog(clearStableStorage, "process" + this.id.toString() + "Playlist.log");
 		this.protocolRecvQueue 		= new LinkedList<Action>();
 		this.protocolSendQueue		= new LinkedList<Action>();
 		this.recvKeepAlive			= new LinkedList<KeepAlive>();
@@ -178,11 +185,11 @@ public class Process3PC implements Runnable {
 		}
 	}
 	
-	public synchronized void start(Integer transactionId)
+	public synchronized void start(Integer transactionId, PlaylistAction playlistAction)
 	{
 		synchronized(this.protocolRecvQueue)
 		{
-			this.protocolRecvQueue.add(new BeginProtocol(transactionId, this.id, this.id));
+			this.protocolRecvQueue.add(new BeginProtocol(transactionId, this.id, this.id, playlistAction));
 		}
 	}
 	
@@ -209,6 +216,15 @@ public class Process3PC implements Runnable {
 	 */
 	private void recover()
 	{
+		// TODO: MIKE: when recovering, if there is a COMMIT in the stable storage
+		// for a specific transaction, make sure that the edit/delete/add was carried
+		// out in the playlistStorage.  At the top of the playlistStorage file
+		// will be a list of transactions which were finished.  We assume that a write
+		// to the playlistStorage log is atomic -- either all or nothing is written. This
+		// is valid given our implementation, because the chances of a write to
+		// stable storage being interrupted by some sort of kill command is negligible.
+		
+		
 		ArrayList<Action> history = this.dtLog.read();
 		
 		// Load status of each transaction in history. We should be able to 
@@ -256,7 +272,38 @@ public class Process3PC implements Runnable {
 			}
 			if (t.state == State.Committed)
 			{
-				sendCommit(t.id, this.monitor.getLive());
+				// TODO: TYLER, take a look at this one to make sure it's okay.
+				int transID = t.id;
+				
+				Action actionFromCommit = null;
+				
+				// Traverse through stable storage to find the information
+				// associated with this transaction ID.
+				for (Iterator<Action> j = history.iterator(); i.hasNext();)
+				{
+					Action b = j.next();
+					
+					if (b instanceof Commit)
+					{
+						if (b.transactionID == transID)
+						{
+							// We have found the COMMIT log entry that matches
+							// this transaction ID. Take the PlaylistAction from here!
+							actionFromCommit = b;
+						}
+					}
+				}
+				
+				// We should have found an Action from this transaction ID in the
+				// COMMIT log entry, since this process said it was COMMITTED.
+				if (actionFromCommit == null)
+				{
+					System.out.println("Failed to find COMMIT log entry for"
+							+ " the transID = " + transID);
+					System.exit(-1);
+				}
+				
+				sendCommit(t.id, this.monitor.getLive(), actionFromCommit);
 			}
 		}
 	}
@@ -304,7 +351,9 @@ public class Process3PC implements Runnable {
 						Integer deadProcess = pi.next();
 						if (t.waitingOn.contains(deadProcess))
 						{
-							handle(new Timeout(t.id, deadProcess, this.id));
+							// MIKE: Pass in null for the PlaylistAction because this is not relevant
+							// here.
+							handle(new Timeout(t.id, deadProcess, this.id, null));
 						}
 					}
 				}
@@ -407,13 +456,13 @@ public class Process3PC implements Runnable {
 			// IF we are coordinator and we got a "YES" vote, this is step (2).
 			if (action instanceof Yes && transaction.role == Role.Coordinator)
 			{
-				countVote(transaction, Decide.Yes);
+				countVote(transaction, Decide.Yes, action);
 			}
 			
 			// If we are coordinator and we got a "NO" vote, this is step (2).
 			else if (action instanceof Abort && transaction.role == Role.Coordinator)
 			{
-				countVote(transaction, Decide.No);
+				countVote(transaction, Decide.No, action);
 			}
 			
 			// We are a participant receiving VOTE-REQ.
@@ -442,7 +491,7 @@ public class Process3PC implements Runnable {
 		{
 			if (action instanceof Commit)
 			{
-				commit(transaction);
+				commit(transaction, action);
 			}
 			else if (action instanceof Ack && transaction.role == Role.Coordinator)
 			{
@@ -455,8 +504,8 @@ public class Process3PC implements Runnable {
 				// to those who did ACK. Note that by committing, this process
 				// moves out of the COMMITTABLE state, so multiple timeouts
 				// from different processes will not all generate commit messages.
-				commit(transaction);
-				sendCommit(transaction.id, transaction.acks);
+				commit(transaction, action);
+				sendCommit(transaction.id, transaction.acks, action);
 			}
 		}
 		// If the process has received COMMIT.
@@ -468,7 +517,7 @@ public class Process3PC implements Runnable {
 		// Handling these commands should be the same independent of state.
 		if (action instanceof Commit)
 		{
-			commit(transaction);
+			commit(transaction, action);
 		}
 		if (action instanceof Abort)
 		{
@@ -478,7 +527,7 @@ public class Process3PC implements Runnable {
 		
 		if (action instanceof StateRequest)
 		{
-			respondToStateRequest(transaction.state, transaction.role, (StateRequest)action);
+			respondToStateRequest(transaction.state, transaction.role, (StateRequest)action, action);
 		}
 	}
 	
@@ -565,14 +614,14 @@ public class Process3PC implements Runnable {
 		updateRole(t.id, Role.Coordinator);
 		
 		// Log START3PC.
-		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants));
+		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants, action.playlistAction));
 		
 		// Send VOTE-REQ to all processes.		
 		for (int i = 0; i < this.numProcesses; i++)
 		{
 			if (i != this.id)
 			{
-				send(new Start3PC(action.transactionID, this.id, i, "", participants));
+				send(new Start3PC(action.transactionID, this.id, i, "", participants, action.playlistAction));
 			}
 		}
 		
@@ -589,7 +638,7 @@ public class Process3PC implements Runnable {
 	private void electionProtocol(Transaction t)
 	{
 		Integer newCoordinator = t.UP % this.numProcesses;
-		send(new YouAreElected(t.id, this.id, newCoordinator));
+		//send(new YouAreElected(t.id, this.id, newCoordinator));
 	}
 	
 	/**
@@ -603,13 +652,15 @@ public class Process3PC implements Runnable {
 		t.waitingOn.clear();
 		
 		updateState(action.transactionID, State.Committable);
-		send(new Ack(action.transactionID, this.id, action.senderID, ""));
+		send(new Ack(action.transactionID, this.id, action.senderID, action.playlistAction));
 		
 		// We are now waiting on a COMMIT message from the coordinator.
 		t.waitingOn.add(action.senderID);
 	}
 	
-	private void countVote(Transaction transaction, Decide vote)
+	// MIKE: added Action in order to pass in the PlaylistAction to the
+	// endVoting method.
+	private void countVote(Transaction transaction, Decide vote, Action action)
 	{
 		transaction.voteCount += 1;
 		
@@ -621,11 +672,11 @@ public class Process3PC implements Runnable {
 		// All participants have voted.
 		if (transaction.voteCount == this.numProcesses - 1)
 		{
-			endVoting(transaction);
+			endVoting(transaction, action);
 		}
 	}
 	
-	private void endVoting(Transaction transaction)
+	private void endVoting(Transaction transaction, Action action)
 	{
 		// We are no longer waiting on any participants.
 		transaction.waitingOn.clear();
@@ -638,7 +689,7 @@ public class Process3PC implements Runnable {
 			{
 				if (i !=  this.id)
 				{
-					send(new Precommit(transaction.id, this.id, i, ""));
+					send(new Precommit(transaction.id, this.id, i, "", action.playlistAction));
 				}
 			}
 			
@@ -653,7 +704,7 @@ public class Process3PC implements Runnable {
 			{
 				if (i != this.id);
 				{
-					send(new Abort(transaction.id, this.id, i, ""));
+					send(new Abort(transaction.id, this.id, i, "", action.playlistAction));
 				}
 			}
 		}
@@ -695,10 +746,10 @@ public class Process3PC implements Runnable {
 	private void voteYes(Start3PC start3PC)
 	{
 		// Write YES to DT log.
-		dtLog.log(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
+		dtLog.log(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants(), start3PC.playlistAction));
 		
 		// Send YES to coordinator.
-		send(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
+		send(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants(), start3PC.playlistAction));
 		
 		// Now uncertain and awaiting coordinator.
 		updateState(start3PC.transactionID, State.Uncertain);
@@ -714,7 +765,7 @@ public class Process3PC implements Runnable {
 		abort(t);
 		
 		// Send ABORT to coordinator.
-		send(new Abort(start3PC.transactionID, this.id, start3PC.senderID, ""));
+		send(new Abort(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.playlistAction));
 	}
 	
 	private void processAck(Ack action, Transaction transaction)
@@ -722,8 +773,8 @@ public class Process3PC implements Runnable {
 		transaction.acks.add(action.senderID);
 		if (transaction.acks.size() == this.numProcesses - 1)
 		{
-			commit(transaction);
-			sendCommit(transaction.id, transaction.acks);
+			commit(transaction, action);
+			sendCommit(transaction.id, transaction.acks, action);
 		}
 	}
 	
@@ -732,11 +783,11 @@ public class Process3PC implements Runnable {
 	 * @param transactionId 	ID of transaction for this COMMIT
 	 * @param processes 		List of process IDs
 	 */
-	private void sendCommit(Integer transactionId, Collection<Integer> processes)
+	private void sendCommit(Integer transactionId, Collection<Integer> processes, Action action)
 	{
 		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
 		{
-			send(new Commit(transactionId, this.id, i.next(), ""));	
+			send(new Commit(transactionId, this.id, i.next(), "", action.playlistAction));	
 		}
 	}
 	
@@ -749,7 +800,10 @@ public class Process3PC implements Runnable {
 	{
 		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
 		{
-			send(new StateRequest(transactionId, this.id, i.next(), ""));	
+			// MIKE: PlaylistAction is null on a state request -- we have just
+			// recovered and are asking others for help, they can tell us
+			// the PlaylistAction.
+			send(new StateRequest(transactionId, this.id, i.next(), "", null));	
 		}
 	}
 	
@@ -762,7 +816,8 @@ public class Process3PC implements Runnable {
 	{
 		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
 		{
-			send(new Abort(transactionId, this.id, i.next(), ""));	
+			// MIKE: pass in null for PlaylistAction, since this is an abort.
+			send(new Abort(transactionId, this.id, i.next(), "", null));	
 		}
 	}
 	
@@ -770,17 +825,21 @@ public class Process3PC implements Runnable {
 	 * Sends current state in response to a STATE-REQ.
 	 * @param request The STATE-REQ.
 	 */
+<<<<<<< HEAD
 	private void respondToStateRequest(State state, Role role, StateRequest request)
+=======
+	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request, Action action)
+>>>>>>> 78ba0da1da756363e0d70dd5a6eabb93e4d5adb6
 	{
 		System.out.println("Responding to state request.");
 		if (state == State.Committed)
 		{
-			send(new Commit(request.transactionID, this.id, request.senderID, ""));
+			send(new Commit(request.transactionID, this.id, request.senderID, "", action.playlistAction));
 		}
 		//TODO TYLER: I am skeptical that ABORTED is sufficient, since we by default start in this state.
 		if (state == State.Aborted)
 		{
-			send(new Abort(request.transactionID, this.id, request.senderID, ""));
+			send(new Abort(request.transactionID, this.id, request.senderID, "", action.playlistAction));
 		}
 			
 	    // TYLER: I don't think we need a separate message type.
@@ -789,14 +848,29 @@ public class Process3PC implements Runnable {
 	
 	/**
 	 * Decides COMMIT: writes to DT log and changes state.
+	 * 
 	 * @param transactionId Transaction being committed.
 	 */
-	private void commit(Transaction t)
+	private void commit(Transaction t, Action action)
 	{
 		if (!t.committed)
 		{
 			t.committed = true;
-			dtLog.log(new Commit(t.id, this.id, this.id, ""));
+			dtLog.log(new Commit(t.id, this.id, this.id, "", action.playlistAction));
+			
+			
+			// MIKE: start: write the edit/delete/add to the Playlist stable storage.
+			ArrayList<String> testCmd = action.playlistAction.getCommand();
+			
+			try {
+				this.playlistLog.log(testCmd, t.id);
+			}
+			catch (Exception e) 
+			{
+				e.printStackTrace();
+			}
+			// MIKE: end: write the edit/delete/add to the Playlist stable storage.
+				
 			System.out.println(t.id + ": COMMIT by process " + this.id);
 			updateState(t.id, State.Committed);
 			
@@ -813,12 +887,25 @@ public class Process3PC implements Runnable {
 	{
 		if (!t.aborted)
 		{
-			dtLog.log(new Abort(t.id, this.id, this.id, ""));
+			// MIKE: PlaylistAction can be null here.
+			dtLog.log(new Abort(t.id, this.id, this.id, "", null));
 			System.out.println(t.id + ": ABORT by process " + this.id);
 			updateState(t.id, State.Aborted);
 			
 			// We are no longer waiting on anyone. We're done.
 			t.waitingOn.clear();
 		}
+	}
+	
+	
+	/**
+	 * Prints this process' Playlist from stable storage.
+	 */
+	public void printPlaylist()
+	{
+		Playlist playlist = this.playlistLog.read();
+		
+		System.out.println("process " + id + "'s Playlist:");
+		playlist.printPlaylist();
 	}
 }

@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  *  * Abstraction for the YOU-ARE-ELECTED message used in the 3PC protocol.
  * 
@@ -20,9 +22,9 @@ public class YouAreElected extends Action implements Serializable
 	/**
 	 * Default constructor.
 	 */
-	public YouAreElected(Integer transactionID, Integer senderID, Integer destinationID)
+	public YouAreElected(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 	}
 
 	@Override

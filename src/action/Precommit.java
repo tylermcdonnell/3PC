@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for a PRECOMMIT message in the 3PC protocol.
  *
@@ -43,9 +45,9 @@ public class Precommit extends Action implements Serializable {
 	/**
 	 * Default constructor
 	 */
-	public Precommit(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public Precommit(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.message = message;
 	}
 

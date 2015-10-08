@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for an COMMIT message in the 3PC protocol.
  *
@@ -19,21 +21,15 @@ import java.io.Serializable;
 public class Commit extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-	
-	/**
-	 * Message being committed
-	 */
-	private String message;
-	
+
+	public Commit(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
+	{
+		super(transactionID, senderID, destinationID, playlistAction);
+	}
+
 	@Override
 	public String toString() {
-		return "COMMIT: " + this.message;
+		return "Commit [senderID=" + senderID + ", destinationID=" + destinationID + ", transactionID=" + transactionID
+				+ ", playlistAction=" + playlistAction + "]";
 	}
-
-	public Commit(Integer transactionID, Integer senderID, Integer destinationID, String message)
-	{
-		super(transactionID, senderID, destinationID);
-		this.message = message;
-	}
-
 }

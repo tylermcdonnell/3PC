@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for the YES message used in the 3PC protocol.
  * 
@@ -33,9 +35,9 @@ public class Yes extends Action implements Serializable {
 	 * Constructor
 	 * @param participants processes involved in this 3PC transaction
 	 */
-	public Yes(Integer transactionID, Integer senderID, Integer destinationID, String message, Collection<Integer> participants)
+	public Yes(Integer transactionID, Integer senderID, Integer destinationID, String message, Collection<Integer> participants, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.participants = new ArrayList<Integer>(participants);
 	}
 	

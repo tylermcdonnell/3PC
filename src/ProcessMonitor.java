@@ -116,7 +116,9 @@ public class ProcessMonitor {
 		{
 			if (System.currentTimeMillis() - lastSent.get(i) > this.interval)
 			{
-				this.network.sendMsg(i, new KeepAlive(0, this.processId, i));
+				// MIKE: For keep alive messages, the PlaylistAction is not required, set it to
+				// null.
+				this.network.sendMsg(i, new KeepAlive(0, this.processId, i, null));
 			}
 			
 			if (System.currentTimeMillis() - this.statuses.get(i).lastReceived > this.timeout)

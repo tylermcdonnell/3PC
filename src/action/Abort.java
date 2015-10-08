@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for an ABORT message in the 3PC protocol.
  * 
@@ -37,9 +39,9 @@ public class Abort extends Action implements Serializable {
 	/**
 	 * Default constructor.
 	 */
-	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.message = message;
 	}
 }
