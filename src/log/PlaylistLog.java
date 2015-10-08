@@ -38,6 +38,8 @@ public class PlaylistLog {
 		this.playlist = new Playlist();
 		this.file = new File(filename);
 		
+		System.out.println("CREATED FILE: " + this.file.toPath());
+		
 		if (reset)
 		{
 			try
@@ -50,12 +52,28 @@ public class PlaylistLog {
 						+ "file from disk. Should never happen.");
 				e.printStackTrace();
 			}
+			
+			primeLog();
 		}
 		else
 		{
 			readFromDisk();
 		}
 	}
+	
+	
+	/**
+	 * Upon creating a new File on disk, it must be written to by the
+	 * process who created it before the process may be killed and recover
+	 * information from the log. Therefore, write something to this file
+	 * and then delete what was written (write again), in order to
+	 * "prime" the file.
+	 */
+	private void primeLog()
+	{
+		saveToDisk();
+	}
+	
 
 	/**
 	 * Returns the current playlist.
@@ -149,7 +167,9 @@ public class PlaylistLog {
 	private boolean readFromDisk()
 	{
 		try
-		{
+		{	
+			
+			
 			FileInputStream streamIn = new FileInputStream(this.file);
 			ObjectInputStream objectIn = new ObjectInputStream(streamIn);
 			this.playlist = (Playlist)objectIn.readObject();

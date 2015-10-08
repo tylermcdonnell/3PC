@@ -46,12 +46,28 @@ public class TransactionLog {
 			{
 				e.printStackTrace();
 			}
+			
+			primeLog();
 		}
 		else
 		{
 			readFromDisk();
 		}
 	}
+	
+	
+	/**
+	 * Upon creating a new File on disk, it must be written to by the
+	 * process who created it before the process may be killed and recover
+	 * information from the log. Therefore, write something to this file
+	 * and then delete what was written (write again), in order to
+	 * "prime" the file.
+	 */
+	private void primeLog()
+	{
+		saveToDisk();
+	}
+	
 
 	/**
 	 * Returns the current transaction log.
