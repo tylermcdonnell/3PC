@@ -1,0 +1,27 @@
+// Create four processes in the network.
+cp 4
+
+// Add "Steal My Girl" -- www.youtube.com/SMG
+add Steal_My_Girl www.youtube.com/SMG
+
+// Wait until this COMMIT is done (just in case)
+s 2
+
+// Print playlists of all processes in the network.
+p
+
+add Where_Do_Broken_Hearts_Go_? www.youtube.com/WDBHG
+s 2
+p
+
+edit Steal_My_Girl Steal_My_Girl_(EDITED) www.youtube.com/SMG_(EDITED)
+s 2
+p
+
+remove Steal_My_Girl_(EDITED)
+s 2
+p
+
+remove Where_Do_Broken_Hearts_Go_?
+s 2
+p

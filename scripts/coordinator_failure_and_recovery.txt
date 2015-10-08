@@ -1,6 +1,6 @@
 cp 3
 pm 0 2
-3pc
+add Brick_By_Boring_Brick youtube.com/BBBB
 s 2
 kill 0
 s 2

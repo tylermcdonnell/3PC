@@ -1,6 +1,6 @@
 cp 3
 pm 0 2
-3pc
+add Goodbye_Time youtube.com/GT
 s 1
 kill 1
 pm 0 2
