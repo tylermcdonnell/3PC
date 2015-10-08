@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for ABORT and NO in the 3PC protocol. When logged to stable storage,
  * this is an ABORT. We can also use this action to mean a NO vote when sent to
@@ -25,9 +27,9 @@ public class Abort extends Action implements Serializable {
 	/**
 	 * Default constructor.
 	 */
-	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public Abort(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.message = message;
 	}
 }

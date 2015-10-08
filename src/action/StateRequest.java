@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for the STATE-REQ action used in the 3PC protocol. Used
  * to request the current state of a process.
@@ -25,9 +27,9 @@ public class StateRequest extends Action implements Serializable {
 		return "COMMIT: " + this.message;
 	}
 
-	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public StateRequest(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		//this.role 		= role;
 		//this.state 		= state;
 		this.message 	= message;

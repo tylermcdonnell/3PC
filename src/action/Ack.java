@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for a basic ACK. Used in the 3PC protocol to reflect receipt
  * of the PRECOMMIT command for a process to the coordinator.
@@ -21,9 +23,9 @@ public class Ack extends Action implements Serializable {
 		return "ACK: " + this.message;
 	}
 
-	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message)
+	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.message = message;
 	}
 

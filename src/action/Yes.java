@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import playlist.PlaylistAction;
+
 /**
  * Abstraction for a YES vote in the 3PC protocol. Is logged to stable storage
  * prior to being sent to other processes.
@@ -27,9 +29,9 @@ public class Yes extends Action implements Serializable {
 	 * Constructor
 	 * @param participants processes involved in this 3PC transaction
 	 */
-	public Yes(Integer transactionID, Integer senderID, Integer destinationID, String message, Collection<Integer> participants)
+	public Yes(Integer transactionID, Integer senderID, Integer destinationID, String message, Collection<Integer> participants, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.participants = new ArrayList<Integer>(participants);
 	}
 	

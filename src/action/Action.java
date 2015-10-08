@@ -2,6 +2,8 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
+
 public class Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
@@ -18,11 +20,16 @@ public class Action implements Serializable {
 	// back and forth.
 	public Integer transactionID;
 	
+	// Each action will contain the playlist action associated with this round
+	// of the protocol.
+	public PlaylistAction playlistAction;
 	
-	public Action(Integer transactionID, Integer senderID, Integer destinationID)
+	
+	public Action(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
 		this.transactionID = transactionID;
 		this.senderID = senderID;
 		this.destinationID = destinationID;
+		this.playlistAction = playlistAction;
 	}
 }

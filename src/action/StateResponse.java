@@ -2,6 +2,7 @@ package action;
 
 import java.io.Serializable;
 
+import playlist.PlaylistAction;
 import protocol.ThreePC;
 
 /**
@@ -25,9 +26,9 @@ public class StateResponse extends Action implements Serializable {
 		return "COMMIT: " + this.message;
 	}
 
-	public StateResponse(Integer transactionID, Integer senderID, Integer destinationID, ThreePC.State state, ThreePC.Role role, String message)
+	public StateResponse(Integer transactionID, Integer senderID, Integer destinationID, ThreePC.State state, ThreePC.Role role, String message, PlaylistAction playlistAction)
 	{
-		super(transactionID, senderID, destinationID);
+		super(transactionID, senderID, destinationID, playlistAction);
 		this.state 		= state;
 		this.role 		= role;
 		this.message 	= message;
