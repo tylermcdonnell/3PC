@@ -334,7 +334,9 @@ public class Process3PC implements Runnable {
 	{
 		System.out.println(action.transactionID + ": Process " + this.id + " receives [" + action.toString() + "] from Process " + action.senderID);
 		Transaction transaction = transactions.get(action.transactionID);
-		if(transaction == null)
+		
+		// MIKE: what does this mean?
+		if (transaction == null)
 		{
 			transaction = createTransaction(action.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted);
 		}
@@ -345,27 +347,37 @@ public class Process3PC implements Runnable {
 			start3PC(transaction, (BeginProtocol)action);
 		}
 		
+		// If the process receiving the action is ABORTED.
 		if (transaction.state == ThreePC.State.Aborted)
 		{
+			// IF we are coordinator and we got a "YES" vote, this is step (2).
 			if (action instanceof Yes && transaction.role == ThreePC.Role.Coordinator)
 			{
 				countVote(transaction, Decide.Yes);
 			}
+			
+			// If we are coordinator and we got a "NO" vote, this is step (2).
 			else if (action instanceof Abort && transaction.role == ThreePC.Role.Coordinator)
 			{
 				countVote(transaction, Decide.No);
 			}
+			
+			// We are a participant receiving VOTE-REQ.
 			else if (action instanceof Start3PC)
 			{
 				vote(transaction, (Start3PC)action);
 			}
 		}
+		
 		else if (transaction.state == ThreePC.State.Uncertain)
 		{
+			// We are a participant receiving PRE-COMMIT.
 			if (action instanceof Precommit)
 			{
 				precommit(transaction, (Precommit)action);
 			}
+			
+			// 
 			else if (action instanceof Abort)
 			{
 				abort(transaction);
@@ -392,6 +404,7 @@ public class Process3PC implements Runnable {
 				sendCommit(transaction.id, transaction.acks);
 			}
 		}
+		
 		else if (transaction.state == ThreePC.State.Committed)
 		{
 			
@@ -406,6 +419,8 @@ public class Process3PC implements Runnable {
 		{
 			abort(transaction);
 		}
+		
+		
 		if (action instanceof StateRequest)
 		{
 			respondToStateRequest(transaction.state, transaction.role, (StateRequest)action);
