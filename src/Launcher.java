@@ -219,8 +219,8 @@ public class Launcher {
 		threads.get(id).stop();
 		
 		// Spin-wait for process to become "TERMINATED."
-		while (!threads.get(id).getState().equals("TERMINATED")) {
-		}
+		//while (!threads.get(id).getState().equals("TERMINATED")) {
+		//}
 		
 		System.out.println("CONTROLLER: killed process " + id);
 	}
