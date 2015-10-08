@@ -301,7 +301,7 @@ public class Process3PC implements Runnable {
 		for (Iterator<Map.Entry<Integer, Transaction>> i = this.transactions.entrySet().iterator(); i.hasNext();)
 		{
 			Transaction t = i.next().getValue();
-			if (t.state == State.Uncertain)
+			if (t.state == State.Uncertain || t.state == State.Committable)
 			{
 				System.out.println("Process " + this.id + " is asking other processes for decisions.");
 				sendDecisionRequest(t, getListOfAllProcesses(this.id));

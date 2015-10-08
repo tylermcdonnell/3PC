@@ -84,6 +84,7 @@ public class Launcher {
 	}
 
 	private static void execute(String command, String[] parameters) throws InterruptedException {
+		System.out.println(command);
 		if (command.equals(ADD_CMD)) {
 			System.out.println("Adding <" + parameters[0] + ", " + parameters[1] + ">.");
 		} else if (command.equals(REMOVE_CMD)) {
