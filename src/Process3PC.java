@@ -41,15 +41,13 @@ public class Process3PC implements Runnable {
 		// The ID of this transaction, i.e., one instance of 3PC.
 		Integer id;
 		
+		// The action underlying this 3PC protocol.
+		PlaylistAction playlistAction;
+		
 		// These are the role and state of this process with regard
 		// to this transaction (i.e., one instance of 3PC).
 		Role role;
 		State state;
-		
-		// This is the ID of the process who this process believes is
-		// currently coordinator of this transaction. This may change
-		// many times during an execution of 3PC.
-		Integer coordinator;
 		
 		// Used to count votes if the process if the coordinator of transaction.
 		Integer voteCount;
@@ -78,7 +76,22 @@ public class Process3PC implements Runnable {
 		// of processes N. 
 		Integer UP;
 		
-		PlaylistAction playlistAction;
+		// *******************************************************************
+		// * State used ONLY if the process is elected coordinator.          *
+		// *******************************************************************
+		
+		// This is a boolean value indicating that this process is currently
+		// the elected coordinator and thus in the termination protocol.
+		boolean inTerminationProtocol;
+		
+		// The list of participants live at the moment the termination protocol begins.
+		Collection<Integer> terminationParticipants;
+		
+		// The list of termination participants who responded Committable
+		Collection<Integer> terminationCommittable;
+		
+		// The list of termination participants who responded Uncertain
+		Collection<Integer> terminationUncertain;
 		
 		Transaction(Integer transactionId, Role role, State state, PlaylistAction action)
 		{
@@ -95,6 +108,11 @@ public class Process3PC implements Runnable {
 			
 			this.UP 			= 0;
 			this.playlistAction = action;
+			
+			this.inTerminationProtocol = false;
+			this.terminationParticipants  = new ArrayList<Integer>();
+			this.terminationCommittable   = new ArrayList<Integer>();
+			this.terminationUncertain     = new ArrayList<Integer>();
 		}
 	}
 	
@@ -177,7 +195,7 @@ public class Process3PC implements Runnable {
 		this.protocolSendQueue		= new LinkedList<Action>();
 		this.recvKeepAlive			= new LinkedList<KeepAlive>();
 		this.transactions 			= new Hashtable<Integer, Transaction>();
-		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 500, 250);
+		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 1000, 250);
 		this.messageCount 			= 0;
 		this.haltCount    			= Integer.MAX_VALUE;
 		
@@ -250,9 +268,17 @@ public class Process3PC implements Runnable {
 		for (Iterator<Action> i = history.iterator(); i.hasNext();)
 		{
 			Action a = i.next();
+			if (a instanceof Start3PC)
+			{
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Uncertain, a.playlistAction));
+			}
 			if (a instanceof Yes)
 			{
 				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Uncertain, a.playlistAction));
+			}
+			if (a instanceof Precommit)
+			{
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Committable, a.playlistAction));
 			}
 			if (a instanceof Abort)
 			{
@@ -282,7 +308,7 @@ public class Process3PC implements Runnable {
 			}
 			if (t.state == State.Aborted)
 			{
-				sendAbort(t.id, this.monitor.getLive());
+				sendAbort(t, this.monitor.getLive());
 			}
 			if (t.state == State.Committed)
 			{	
@@ -464,8 +490,8 @@ public class Process3PC implements Runnable {
 		{
 			if (action.senderID >= transaction.UP)
 			{
-				transaction.role = Role.Coordinator;
-				transaction.UP = action.senderID;
+				transaction.role 	= Role.Participant;
+				transaction.UP 		= action.senderID;
 				respondToStateRequest((StateRequest)action, transaction);
 			}
 		}
@@ -478,16 +504,66 @@ public class Process3PC implements Runnable {
 		}
 		
 		// If this process receives a YOU-ARE-ELECTED message, it is now the coordinator.
-		// Send a STATE-REQ to all operational sites.
-		if (action instanceof YouAreElected)
+		// Begin termination protocol by sending STATE-REQ to all participants.
+		if (action instanceof YouAreElected && transaction.role == Role.Participant)
 		{
+			transaction.role 					= Role.Coordinator;
+			transaction.inTerminationProtocol 	= true;
+			transaction.terminationParticipants = this.monitor.getLive();
 			sendStateRequests(transaction);
+		}
+		
+		if (transaction.inTerminationProtocol)
+		{
+			if (action instanceof Commit)
+			{
+				commit(transaction);
+				transaction.inTerminationProtocol = false;
+				sendCommit(transaction.id, transaction.terminationParticipants, transaction.playlistAction);
+				return; // Termination protocol complete.
+			}
+			else if (action instanceof Abort)
+			{
+				abort(transaction);
+				transaction.inTerminationProtocol = false;
+				sendAbort(transaction, transaction.terminationParticipants);
+				return; // Termination protocol complete.
+			}
+			else if (action instanceof Committable)
+			{
+				transaction.terminationCommittable.add(action.senderID);
+			}
+			else if (action instanceof Uncertain)
+			{
+				transaction.terminationUncertain.add(action.senderID);
+			}
+			
+			// If all processes have responded, proceed.
+			if (transaction.terminationCommittable.size() + 
+				transaction.terminationUncertain.size() ==
+				transaction.terminationParticipants.size())
+			{
+				// If at least one process is COMMITTABLE, send PRE-COMMIT and proceed with
+				// regular protocol.
+				if (transaction.terminationCommittable.size() > 0)
+				{
+					sendPrecommit(transaction);
+				}
+				// If all processes are UNCERTAIN, decide ABORT and send to all participants.
+				else
+				{
+					abort(transaction);
+					transaction.inTerminationProtocol = false;
+					sendAbort(transaction, transaction.terminationParticipants);
+					return; // Termination protocol complete.
+				}
+			}
 		}
 		
 		// If we receive a COMMIT, someone has decided, and we can apply their decision.
 		if (action instanceof Commit)
 		{
-			commit(transaction, action);
+			commit(transaction);
 		}
 		
 		// If we receive ABORT, someone has decided, and we can apply their decision.
@@ -543,7 +619,7 @@ public class Process3PC implements Runnable {
 		{
 			if (action instanceof Commit)
 			{
-				commit(transaction, action);
+				commit(transaction);
 			}
 			else if (action instanceof Ack && transaction.role == Role.Coordinator)
 			{
@@ -556,7 +632,7 @@ public class Process3PC implements Runnable {
 				// to those who did ACK. Note that by committing, this process
 				// moves out of the COMMITTABLE state, so multiple timeouts
 				// from different processes will not all generate commit messages.
-				commit(transaction, action);
+				commit(transaction);
 				sendCommit(transaction.id, transaction.acks, action.playlistAction);
 			}
 		}
@@ -691,8 +767,9 @@ public class Process3PC implements Runnable {
 		// We are no longer waiting for PRECOMMIT or ABORT.
 		t.waitingOn.clear();
 		
-		updateState(action.transactionID, State.Committable);
-		send(new Ack(action.transactionID, this.id, action.senderID, action.playlistAction));
+		updateState(t.id, State.Committable);
+		this.dtLog.log(action);
+		send(new Ack(t.id, this.id, action.senderID, action.playlistAction));
 		
 		// We are now waiting on a COMMIT message from the coordinator.
 		t.waitingOn.add(action.senderID);
@@ -724,14 +801,7 @@ public class Process3PC implements Runnable {
 		// If all participants voted YES, PRECOMMIT and send PRECOMMIT to all.
 		if (transaction.yesCount == this.numProcesses - 1)
 		{
-			updateState(transaction.id, State.Committable);
-			for(int i = 0; i < this.numProcesses; i++)
-			{
-				if (i !=  this.id)
-				{
-					send(new Precommit(transaction.id, this.id, i, "", action.playlistAction));
-				}
-			}
+			sendPrecommit(transaction);
 			
 			// We are now waiting on ACKs from all participants.
 			transaction.waitingOn.addAll(getListOfAllProcesses(this.id));
@@ -750,6 +820,19 @@ public class Process3PC implements Runnable {
 		}
 		
 
+	}
+	
+	private void sendPrecommit(Transaction t)
+	{
+		updateState(t.id, State.Committable);
+		this.dtLog.log(new Precommit(t.id, this.id, this.id, "", t.playlistAction));
+		for(int i = 0; i < this.numProcesses; i++)
+		{
+			if (i !=  this.id)
+			{
+				send(new Precommit(t.id, this.id, i, "", t.playlistAction));
+			}
+		}
 	}
 	
 	/**
@@ -813,7 +896,7 @@ public class Process3PC implements Runnable {
 		transaction.acks.add(action.senderID);
 		if (transaction.acks.size() == this.numProcesses - 1)
 		{
-			commit(transaction, action);
+			commit(transaction);
 			sendCommit(transaction.id, transaction.acks, action.playlistAction);
 		}
 	}
@@ -828,6 +911,19 @@ public class Process3PC implements Runnable {
 		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
 		{
 			send(new Commit(transactionId, this.id, i.next(), action));	
+		}
+	}
+	
+	/**
+	 * Sends ABORT to the specified processes.
+	 * @param transactionId 	ID of transaction for this COMMIT
+	 * @param processes 		List of process IDs
+	 */
+	private void sendAbort(Transaction t, Collection<Integer> processes)
+	{
+		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
+		{
+			send(new Abort(t.id, this.id, i.next(), t.playlistAction));	
 		}
 	}
 	
@@ -856,20 +952,6 @@ public class Process3PC implements Runnable {
 	}
 	
 	/**
-	 * Sends ABORT to specified processes.
-	 * @param transactionId		ID of transaction for this ABORT
-	 * @param processes			List of process IDs
-	 */
-	private void sendAbort(Integer transactionId, Collection<Integer> processes)
-	{
-		for(Iterator<Integer> i = processes.iterator(); i.hasNext();)
-		{
-			// MIKE: pass in null for PlaylistAction, since this is an abort.
-			send(new Abort(transactionId, this.id, i.next(), null));	
-		}
-	}
-	
-	/**
 	 * A process has just been elected coordinator and now sends a STATE-REQ to
 	 * all LIVE processes.
 	 */
@@ -888,7 +970,6 @@ public class Process3PC implements Runnable {
 	 */
 	private void respondToStateRequest(StateRequest request, Transaction t)
 	{
-		System.out.println("Responding to state request.");
 		if (t.committed)
 		{
 			send(new Commit(request.transactionID, this.id, request.senderID, t.playlistAction));
@@ -931,16 +1012,16 @@ public class Process3PC implements Runnable {
 	 * 
 	 * @param transactionId Transaction being committed.
 	 */
-	private void commit(Transaction t, Action action)
+	private void commit(Transaction t)
 	{
 		if (!t.committed)
 		{
 			t.committed = true;
-			dtLog.log(new Commit(t.id, this.id, this.id, action.playlistAction));
+			dtLog.log(new Commit(t.id, this.id, this.id, t.playlistAction));
 			
 			
 			// MIKE: start: write the edit/delete/add to the Playlist stable storage.
-			ArrayList<String> testCmd = action.playlistAction.getCommand();
+			ArrayList<String> testCmd = t.playlistAction.getCommand();
 			
 			try {
 				this.playlistLog.log(testCmd, t.id);
@@ -967,8 +1048,8 @@ public class Process3PC implements Runnable {
 	{
 		if (!t.aborted)
 		{
-			// MIKE: PlaylistAction can be null here.
-			dtLog.log(new Abort(t.id, this.id, this.id, null));
+			t.aborted = true;
+			dtLog.log(new Abort(t.id, this.id, this.id, t.playlistAction));
 			System.out.println(t.id + ": ABORT by process " + this.id);
 			updateState(t.id, State.Aborted);
 			
@@ -984,7 +1065,6 @@ public class Process3PC implements Runnable {
 	public void printPlaylist()
 	{
 		Playlist playlist = this.playlistLog.read();
-		
 		System.out.println("process " + id + "'s Playlist:");
 		playlist.printPlaylist();
 	}
