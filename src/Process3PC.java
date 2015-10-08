@@ -488,8 +488,10 @@ public class Process3PC implements Runnable {
 		// set to reflect that they are the new coordinator.
 		if (action instanceof StateRequest)
 		{
+			System.out.println("Process " + this.id + " RECEIVED STATE REQUEST: " + action.senderID + " " + transaction.UP);
 			if (action.senderID >= transaction.UP)
 			{
+				System.out.println("Process " + this.id + " answering " + action.senderID);
 				transaction.role 	= Role.Participant;
 				transaction.UP 		= action.senderID;
 				respondToStateRequest((StateRequest)action, transaction);
@@ -974,7 +976,7 @@ public class Process3PC implements Runnable {
 		{
 			send(new Commit(request.transactionID, this.id, request.senderID, t.playlistAction));
 		}
-		else if (t.aborted)
+		else if (t.state == State.Aborted)
 		{
 			send(new Abort(request.transactionID, this.id, request.senderID, t.playlistAction));
 		}
