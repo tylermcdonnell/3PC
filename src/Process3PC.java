@@ -206,6 +206,7 @@ public class Process3PC implements Runnable {
 		}
 	}
 	
+	
 	public synchronized void start(Integer transactionId, PlaylistAction playlistAction)
 	{
 		synchronized(this.protocolRecvQueue)
@@ -221,6 +222,21 @@ public class Process3PC implements Runnable {
 	public void haltAfter(Integer n)
 	{
 		this.haltCount = this.messageCount + n;
+		
+		//System.out.println("MESSAGE COUNT currently: " + this.messageCount);
+		//System.out.println("HALT COUNT updated to: " + this.haltCount);
+		
+		// Check if we are still halted -- we may be allowed to send
+		// more messages after this update of the halt count.
+		if (this.messageCount >= this.haltCount)
+		{
+			this.halted = true;
+		}
+		else
+		{
+			// (haltCount > messageCount) => we can send more now!
+			this.halted = false;
+		}
 	}
 	
 	/**
@@ -470,8 +486,20 @@ public class Process3PC implements Runnable {
 				this.halted = true;
 				return;
 			}
+			
 			Action a = i.next();
 			i.remove();
+			
+			if (a instanceof Start3PC)
+			{
+				System.out.println(a.transactionID + ": Process " + this.id + " sent VOTE-REQ to Process " + a.destinationID);
+			}
+			
+			if (a instanceof Yes)
+			{
+				System.out.println(a.transactionID + " Process " + this.id + " sent YES vote to Process " + a.destinationID);
+			}
+			
 			this.network.sendMsg(a.destinationID, a);
 			this.messageCount += 1;
 		}
@@ -499,6 +527,13 @@ public class Process3PC implements Runnable {
 	 * be sent over the socket on a call to sendAll subject to halting logic.
 	 * @param action	Action to be sent.
 	 */
+	/*
+	public void send(Action action)
+	{
+		this.protocolSendQueue.add(action);
+	}
+	*/
+	
 	public void send(Action action)
 	{
 		this.protocolSendQueue.add(action);
@@ -780,6 +815,7 @@ public class Process3PC implements Runnable {
 		return list;
 	}
 	
+	/*
 	private void start3PC(Transaction t, BeginProtocol action)
 	{
 		Collection<Integer> participants = getListOfAllProcesses(this.id);
@@ -796,7 +832,41 @@ public class Process3PC implements Runnable {
 		{
 			if (i != this.id)
 			{
+				// MIKE: added this print out to show VOTE-REQs being sent out.
+				System.out.println(action.transactionID + ": Process " + this.id + " sends VOTE-REQ to Process " + i);
 				send(new Start3PC(action.transactionID, this.id, i, "", participants, action.playlistAction));
+			}
+		}
+		
+		// We are now waiting on responses form all processes.
+		t.waitingOn.addAll(getListOfAllProcesses(this.id));
+	}
+	*/
+	
+	// TODO: Mike changed to this new method.
+	private void start3PC(Transaction t, BeginProtocol action)
+	{
+		Collection<Integer> participants = getListOfAllProcesses(this.id);
+		
+		
+		// Update state of this process. We are coord and in state ABORTED 
+		// since we can ABORT unilaterally.
+		updateState(t.id, State.Aborted);
+		updateRole(t.id, Role.Coordinator);
+		
+		// Log START3PC.
+		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants, action.playlistAction));
+		
+		// Place all VOTE-REQ messages in the outgoing message queue.
+		for (int i = 0; i < this.numProcesses; i++)
+		{
+			if (i != this.id)
+			{
+				// MIKE: added this print out to show VOTE-REQs being sent out.
+				//System.out.println(action.transactionID + ": Process " + this.id + " added VOTE-REQ to Process " + i + " to outgoing message queue.");
+				
+				protocolSendQueue.add(new Start3PC(action.transactionID, this.id, i, "", participants, action.playlistAction));
+				//send(new Start3PC(action.transactionID, this.id, i, "", participants, action.playlistAction));
 			}
 		}
 		
@@ -936,6 +1006,8 @@ public class Process3PC implements Runnable {
 		
 		// Send YES to coordinator.
 		send(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants(), start3PC.playlistAction));
+		
+		System.out.println();
 		
 		// Now uncertain and awaiting coordinator.
 		updateState(start3PC.transactionID, State.Uncertain);
