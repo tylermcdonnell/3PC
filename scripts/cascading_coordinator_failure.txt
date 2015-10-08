@@ -1,0 +1,16 @@
+cp 3
+// Have first coordinator stop after sending VOTE-REQ
+pm 0 2
+3pc
+s 2
+// Have process 1 stop after sending STATE-REQ, which will
+// happen once it is elected leader when we kill coordinator
+pm 1 2
+// Kill coordinator
+kill 0
+s 2
+// Kill new coordinator
+kill 1
+s 2
+revive 0
+revive 1

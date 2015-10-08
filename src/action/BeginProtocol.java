@@ -5,8 +5,11 @@ import java.io.Serializable;
 import playlist.PlaylistAction;
 
 /**
- * This class does not correspond to an action in the 3PC protocol.
- * It is used by the controller to coordinate new transactions.
+ * Message-passing construct to initiate the 3PC protocol.
+ * 
+ * This is NOT part of the 3PC protocol. The CONTROLLER merely
+ * uses this to tell processes that they "want" to initiate
+ * the 3PC protocol for some playlist-related functionality.
  */
 public class BeginProtocol extends Action implements Serializable {
 	
@@ -22,6 +25,4 @@ public class BeginProtocol extends Action implements Serializable {
 		return "BeginProtocol [senderID=" + senderID + ", destinationID=" + destinationID + ", transactionID="
 				+ transactionID + ", playlistAction = " + this.playlistAction.toString() + "]";
 	}
-	
-
 }

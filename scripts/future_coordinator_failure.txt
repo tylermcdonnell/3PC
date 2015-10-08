@@ -1,0 +1,12 @@
+cp 4
+// Have coordinator pause after sending VOTE-REQ
+pm 0 2
+3pc
+s 2
+// Kill the coordinator and the process that the leader
+// election protocol would elect as the next leader
+kill 1
+kill 0
+s 5
+revive 0
+revive 1
