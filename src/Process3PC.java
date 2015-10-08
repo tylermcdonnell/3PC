@@ -803,7 +803,7 @@ public class Process3PC implements Runnable {
 			// MIKE: PlaylistAction is null on a state request -- we have just
 			// recovered and are asking others for help, they can tell us
 			// the PlaylistAction.
-			send(new StateRequest(transactionId, this.id, i.next(), "", null));	
+			send(new StateRequest(transactionId, this.id, i.next(), null));	
 		}
 	}
 	
@@ -825,11 +825,7 @@ public class Process3PC implements Runnable {
 	 * Sends current state in response to a STATE-REQ.
 	 * @param request The STATE-REQ.
 	 */
-<<<<<<< HEAD
-	private void respondToStateRequest(State state, Role role, StateRequest request)
-=======
-	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request, Action action)
->>>>>>> 78ba0da1da756363e0d70dd5a6eabb93e4d5adb6
+	private void respondToStateRequest(State state, Role role, StateRequest request, Action action)
 	{
 		System.out.println("Responding to state request.");
 		if (state == State.Committed)

@@ -15,21 +15,15 @@ import playlist.PlaylistAction;
 public class Ack extends Action implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-	
-	/**
-	 * Target action of 3PC transaction.
-	 */
-	private String message;
-	
-	@Override
-	public String toString() {
-		return "ACK: " + this.message;
-	}
 
-	public Ack(Integer transactionID, Integer senderID, Integer destinationID, String message, PlaylistAction playlistAction)
+	public Ack(Integer transactionID, Integer senderID, Integer destinationID, PlaylistAction playlistAction)
 	{
 		super(transactionID, senderID, destinationID, playlistAction);
-		this.message = message;
 	}
 
+	@Override
+	public String toString() {
+		return "Ack [senderID=" + senderID + ", destinationID=" + destinationID + ", transactionID=" + transactionID
+				+ ", playlistAction=" + playlistAction + "]";
+	}
 }
