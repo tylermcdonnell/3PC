@@ -3,10 +3,22 @@ package action;
 import java.io.Serializable;
 
 /**
- * Abstraction for ABORT and NO in the 3PC protocol. When logged to stable storage,
- * this is an ABORT. We can also use this action to mean a NO vote when sent to
- * other processes. (Notice they are equivalent).
- *
+ * Abstraction for an ABORT message in the 3PC protocol.
+ * 
+ * Use Cases:
+ * 
+ * (1) A process decides no and logs ABORT to its DT log.
+ * 
+ * (2) A process sends its vote NO (i.e., ABORT) to the coordinator
+ * in response to a START3PC (i.e., VOTE-REQ).
+ * 
+ * (3) A process receives a STATE-REQ from an elected coordinator
+ * and has previously decided ABORT. 
+ * 
+ * (4) A process knows the decision is ABORT and sends ABORT
+ * in response to a DEC-REQ (i.e., a dead process just came 
+ * up and is querying everyone to see if anyone knows the 
+ * decision).
  */
 public class Abort extends Action implements Serializable {
 

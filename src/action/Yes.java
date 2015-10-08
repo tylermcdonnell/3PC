@@ -5,9 +5,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 /**
- * Abstraction for a YES vote in the 3PC protocol. Is logged to stable storage
- * prior to being sent to other processes.
- *
+ * Abstraction for the YES message used in the 3PC protocol.
+ * 
+ * Use Cases:
+ * 
+ * (1) A process sends YES as its vote in response to a START3PC
+ * (i.e., VOTE-REQ) from the coordinator.
+ * 
+ * (2) A process logs YES as its vote after receiving a START3PC
+ * (i.e., VOTE-REQ) from the coordinator.
  */
 public class Yes extends Action implements Serializable {
 
@@ -35,9 +41,10 @@ public class Yes extends Action implements Serializable {
 	
 	@Override
 	public String toString() {
-		return "Yes: " + this.message + " [participants=" + participants + "]";
+		return "Yes [participants=" + participants + ", message=" + message + ", senderID=" + senderID
+				+ ", destinationID=" + destinationID + ", transactionID=" + transactionID + "]";
 	}
-	
+
 	public Collection<Integer> getParticipants()
 	{
 		return this.participants;

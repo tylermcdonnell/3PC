@@ -9,18 +9,44 @@ import java.util.Map;
 import action.*;
 import framework.NetController;
 import log.TransactionLog;
-import protocol.ThreePC;
 
 public class Process3PC implements Runnable {
+	
+	// Possible 3PC roles.
+	// Coordinator: Process "coordinating" the 3PC protocol.
+	// Participant: Process voting in 3PC protocol.
+	public enum Role
+	{
+		Coordinator, Participant;
+	}
+	
+	// Possible 3PC states.
+	// Aborted: 	The process has not voted, has voted NO, or has received an ABORT.
+	// Uncertain:	The process has voted YES but not received a PRECOMMIT or ABORT.
+	// Committable:	The process has received PRECOMMIT, but has not received COMMIT.
+	// Committed:	The process has received and decided to COMMIT. 
+	public enum State 
+	{
+		Aborted, Uncertain, Committable, Committed
+	}
 	
 	/**
 	 * The state kept for each 3PC transaction.
 	 */
 	private class Transaction
 	{
+		// The ID of this transaction, i.e., one instance of 3PC.
 		Integer id;
-		ThreePC.Role role;
-		ThreePC.State state;
+		
+		// These are the role and state of this process with regard
+		// to this transaction (i.e., one instance of 3PC).
+		Role role;
+		State state;
+		
+		// This is the ID of the process who this process believes is
+		// currently coordinator of this transaction. This may change
+		// many times during an execution of 3PC.
+		Integer coordinator;
 		
 		// Used to count votes if the process if the coordinator of transaction.
 		Integer voteCount;
@@ -35,7 +61,21 @@ public class Process3PC implements Runnable {
 		boolean committed;
 		boolean aborted;
 		
-		Transaction(Integer transactionId, ThreePC.Role role, ThreePC.State state)
+		// This is the UP list for the transaction. This is really tricky.
+		// We only "remove" a process from the UP list when (a) it is the 
+		// coordinator and (b) we observe that it has failed. We do not
+		// remove processes that fail at any point from the UP list. So,
+		// we will increment UP if the current UP value is the ID of the
+		// person we believe to be the coordinator and we observe that they
+		// are dead. Additionally, if we receive a STATE-REQ from a process
+		// of an ID higher than our current UP, we will set UP to the ID of
+		// the sender of that STATE-REQ, as we can conclude that they are 
+		// the new coordinator. FINALLY, it is possible that leader election
+		// will continue even after a total failure, so we % UP by the number
+		// of processes N. 
+		Integer UP;
+		
+		Transaction(Integer transactionId, Role role, State state)
 		{
 			this.id 		= transactionId;
 			this.role 		= role;
@@ -47,6 +87,8 @@ public class Process3PC implements Runnable {
 			
 			this.committed 	= false;
 			this.aborted   	= false;
+			
+			this.UP 		= 0;
 		}
 	}
 	
@@ -180,16 +222,16 @@ public class Process3PC implements Runnable {
 			Action a = i.next();
 			if (a instanceof Yes)
 			{
-				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Uncertain));
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Uncertain));
 			}
 			if (a instanceof Abort)
 			{
-				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted));
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Aborted));
 				this.transactions.get(a.transactionID).aborted = true;
 			}
 			if (a instanceof Commit)
 			{
-				this.transactions.put(a.transactionID, new Transaction(a.transactionID, ThreePC.Role.Participant, ThreePC.State.Committed));
+				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Committed));
 				this.transactions.get(a.transactionID).committed = true;
 			}
 		}
@@ -203,16 +245,16 @@ public class Process3PC implements Runnable {
 		for (Iterator<Map.Entry<Integer, Transaction>> i = this.transactions.entrySet().iterator(); i.hasNext();)
 		{
 			Transaction t = i.next().getValue();
-			if (t.state == ThreePC.State.Uncertain)
+			if (t.state == State.Uncertain)
 			{
 				System.out.println("Sending STATE REQ");
 				sendStateRequest(t.id, getListOfAllProcesses(this.id));
 			}
-			if (t.state == ThreePC.State.Aborted)
+			if (t.state == State.Aborted)
 			{
 				sendAbort(t.id, this.monitor.getLive());
 			}
-			if (t.state == ThreePC.State.Committed)
+			if (t.state == State.Committed)
 			{
 				sendCommit(t.id, this.monitor.getLive());
 			}
@@ -335,29 +377,41 @@ public class Process3PC implements Runnable {
 		System.out.println(action.transactionID + ": Process " + this.id + " receives [" + action.toString() + "] from Process " + action.senderID);
 		Transaction transaction = transactions.get(action.transactionID);
 		
-		// MIKE: what does this mean?
+		// This means that this Action is the first message this process has
+		// received about this transaction. That means this process is not
+		// currently the coordinator of this transaction. Typically, the
+		// first message a process receives will be a START3PC (i.e., VOTE-REQ),
+		// but in certain failure cases, it is possible for the process to
+		// receive a different initial message.
 		if (transaction == null)
 		{
-			transaction = createTransaction(action.transactionID, ThreePC.Role.Participant, ThreePC.State.Aborted);
+			transaction = createTransaction(action.transactionID, Role.Participant, State.Aborted);
 		}
 		
-		// Controller selected this process to begin 3PC as coordinator.
+		// CONTROLLER selected this process to begin 3PC as coordinator.
 		if (action instanceof BeginProtocol)
 		{
 			start3PC(transaction, (BeginProtocol)action);
 		}
 		
+		// Coordinator timed out; carry out election protocol.
+		if (action instanceof Timeout && action.senderID == transaction.coordinator)
+		{
+			transaction.UP += 1;
+			electionProtocol(transaction);
+		}
+		
 		// If the process receiving the action is ABORTED.
-		if (transaction.state == ThreePC.State.Aborted)
+		if (transaction.state == State.Aborted)
 		{
 			// IF we are coordinator and we got a "YES" vote, this is step (2).
-			if (action instanceof Yes && transaction.role == ThreePC.Role.Coordinator)
+			if (action instanceof Yes && transaction.role == Role.Coordinator)
 			{
 				countVote(transaction, Decide.Yes);
 			}
 			
 			// If we are coordinator and we got a "NO" vote, this is step (2).
-			else if (action instanceof Abort && transaction.role == ThreePC.Role.Coordinator)
+			else if (action instanceof Abort && transaction.role == Role.Coordinator)
 			{
 				countVote(transaction, Decide.No);
 			}
@@ -368,8 +422,8 @@ public class Process3PC implements Runnable {
 				vote(transaction, (Start3PC)action);
 			}
 		}
-		
-		else if (transaction.state == ThreePC.State.Uncertain)
+		// If the process receiving the action has voted YES, but not received PRECOMMIT or ABORT.
+		else if (transaction.state == State.Uncertain)
 		{
 			// We are a participant receiving PRE-COMMIT.
 			if (action instanceof Precommit)
@@ -383,18 +437,19 @@ public class Process3PC implements Runnable {
 				abort(transaction);
 			}
 		}
-		else if (transaction.state == ThreePC.State.Committable)
+		// If the process receiving the action has received PRECOMMIT, but no COMMIT or ABORT.
+		else if (transaction.state == State.Committable)
 		{
 			if (action instanceof Commit)
 			{
 				commit(transaction);
 			}
-			else if (action instanceof Ack && transaction.role == ThreePC.Role.Coordinator)
+			else if (action instanceof Ack && transaction.role == Role.Coordinator)
 			{
 				// Document ACK.
 				processAck((Ack)action, transaction);
 			}
-			else if (action instanceof Timeout && transaction.role == ThreePC.Role.Coordinator)
+			else if (action instanceof Timeout && transaction.role == Role.Coordinator)
 			{
 				// Even if we don't receive all ACKs, COMMIT and send COMMIT
 				// to those who did ACK. Note that by committing, this process
@@ -404,8 +459,8 @@ public class Process3PC implements Runnable {
 				sendCommit(transaction.id, transaction.acks);
 			}
 		}
-		
-		else if (transaction.state == ThreePC.State.Committed)
+		// If the process has received COMMIT.
+		else if (transaction.state == State.Committed)
 		{
 			
 		}
@@ -433,7 +488,7 @@ public class Process3PC implements Runnable {
 	 * @param initialRole	Coordinator or Participant
 	 * @param initialState	Aborted, Uncertain, Committable, or Committed
 	 */
-	private Transaction createTransaction(Integer transactionId, ThreePC.Role initialRole, ThreePC.State initialState)
+	private Transaction createTransaction(Integer transactionId, Role initialRole, State initialState)
 	{
 		Transaction t = new Transaction(transactionId, initialRole, initialState);
 		try
@@ -453,7 +508,7 @@ public class Process3PC implements Runnable {
 	 * @param id			id of process to update
 	 * @param initialState	new state, Aborted, Uncertain, Committable, Committed
 	 */
-	private void updateState(Integer transactionId, ThreePC.State state)
+	private void updateState(Integer transactionId, State state)
 	{
 		try
 		{
@@ -471,7 +526,7 @@ public class Process3PC implements Runnable {
 	 * @param transactionId	id of process to update
 	 * @param role			new role, Participant or Coordinator
 	 */
-	private void updateRole(Integer transactionId, ThreePC.Role role)
+	private void updateRole(Integer transactionId, Role role)
 	{
 		try
 		{
@@ -506,8 +561,8 @@ public class Process3PC implements Runnable {
 		Collection<Integer> participants = getListOfAllProcesses(this.id);
 		
 		// Controller has selected this process to be coordinator.
-		updateState(t.id, ThreePC.State.Aborted);
-		updateRole(t.id, ThreePC.Role.Coordinator);
+		updateState(t.id, State.Aborted);
+		updateRole(t.id, Role.Coordinator);
 		
 		// Log START3PC.
 		this.dtLog.log(new Start3PC(action.transactionID, this.id, this.id, "", participants));
@@ -526,6 +581,18 @@ public class Process3PC implements Runnable {
 	}
 	
 	/**
+	 * This should only be called when the process this process believes to 
+	 * be coordinator is dead. Carry out the election protocol: send URELECTED
+	 * to the process with ID = UP % N, where N is the number of processes 
+	 * and UP is the UP set, represented as an Integer.
+	 */
+	private void electionProtocol(Transaction t)
+	{
+		Integer newCoordinator = t.UP % this.numProcesses;
+		send(new YouAreElected(t.id, this.id, newCoordinator));
+	}
+	
+	/**
 	 * Upon receipt of PRECOMMIT, advance state to COMMITTABLE
 	 * and send an ACK to the coordinator.
 	 * @param transaction
@@ -535,7 +602,7 @@ public class Process3PC implements Runnable {
 		// We are no longer waiting for PRECOMMIT or ABORT.
 		t.waitingOn.clear();
 		
-		updateState(action.transactionID, ThreePC.State.Committable);
+		updateState(action.transactionID, State.Committable);
 		send(new Ack(action.transactionID, this.id, action.senderID, ""));
 		
 		// We are now waiting on a COMMIT message from the coordinator.
@@ -566,7 +633,7 @@ public class Process3PC implements Runnable {
 		// If all participants voted YES, PRECOMMIT and send PRECOMMIT to all.
 		if (transaction.yesCount == this.numProcesses - 1)
 		{
-			updateState(transaction.id, ThreePC.State.Committable);
+			updateState(transaction.id, State.Committable);
 			for(int i = 0; i < this.numProcesses; i++)
 			{
 				if (i !=  this.id)
@@ -634,7 +701,7 @@ public class Process3PC implements Runnable {
 		send(new Yes(start3PC.transactionID, this.id, start3PC.senderID, "", start3PC.getParticipants()));
 		
 		// Now uncertain and awaiting coordinator.
-		updateState(start3PC.transactionID, ThreePC.State.Uncertain);
+		updateState(start3PC.transactionID, State.Uncertain);
 	}
 	
 	/**
@@ -703,15 +770,15 @@ public class Process3PC implements Runnable {
 	 * Sends current state in response to a STATE-REQ.
 	 * @param request The STATE-REQ.
 	 */
-	private void respondToStateRequest(ThreePC.State state, ThreePC.Role role, StateRequest request)
+	private void respondToStateRequest(State state, Role role, StateRequest request)
 	{
 		System.out.println("Responding to state request.");
-		if (state == ThreePC.State.Committed)
+		if (state == State.Committed)
 		{
 			send(new Commit(request.transactionID, this.id, request.senderID, ""));
 		}
 		//TODO TYLER: I am skeptical that ABORTED is sufficient, since we by default start in this state.
-		if (state == ThreePC.State.Aborted)
+		if (state == State.Aborted)
 		{
 			send(new Abort(request.transactionID, this.id, request.senderID, ""));
 		}
@@ -731,7 +798,7 @@ public class Process3PC implements Runnable {
 			t.committed = true;
 			dtLog.log(new Commit(t.id, this.id, this.id, ""));
 			System.out.println(t.id + ": COMMIT by process " + this.id);
-			updateState(t.id, ThreePC.State.Committed);
+			updateState(t.id, State.Committed);
 			
 			// We are no longer waiting on anyone. We're done.
 			t.waitingOn.clear();
@@ -748,7 +815,7 @@ public class Process3PC implements Runnable {
 		{
 			dtLog.log(new Abort(t.id, this.id, this.id, ""));
 			System.out.println(t.id + ": ABORT by process " + this.id);
-			updateState(t.id, ThreePC.State.Aborted);
+			updateState(t.id, State.Aborted);
 			
 			// We are no longer waiting on anyone. We're done.
 			t.waitingOn.clear();

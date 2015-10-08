@@ -3,9 +3,12 @@ package action;
 import java.io.Serializable;
 
 /**
- * Abstraction for a basic ACK. Used in the 3PC protocol to reflect receipt
- * of the PRECOMMIT command for a process to the coordinator.
+ * Abstraction for an ACK message in the 3PC protocol.
  *
+ * Use Cases:
+ * 
+ * (1) A process sends an ACK in response to a PRECOMMIT
+ * message from the coordinator.
  */
 public class Ack extends Action implements Serializable {
 
