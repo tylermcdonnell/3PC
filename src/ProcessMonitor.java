@@ -144,7 +144,16 @@ public class ProcessMonitor {
 				
 				// Take this process ID off our list of non-failed
 				// processes forever.
-				this.nonFailedProcesses.remove(i);
+				for(Iterator<Integer> it = this.nonFailedProcesses.iterator(); it.hasNext();)
+				{
+					Integer processId = it.next();
+					if (processId == i)
+					{
+						it.remove();
+					}
+				}
+				// TYLER: This removes an index, not the object, which will cause problems.
+				//this.nonFailedProcesses.remove(i);
 			}
 		}
 		

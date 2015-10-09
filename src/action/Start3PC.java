@@ -32,12 +32,14 @@ public class Start3PC extends Action implements Serializable {
 		this.participants = new ArrayList<Integer>(participants);
 		this.message = message;
 	}
-
+	
 	@Override
 	public String toString() {
-		return "START3PC: " + message + " [participants=" + participants + "]";
+		return "Start3PC [participants=" + participants + ", message=" + message + ", senderID=" + senderID
+				+ ", destinationID=" + destinationID + ", transactionID=" + transactionID + ", playlistAction="
+				+ playlistAction + "]";
 	}
-	
+
 	public Collection<Integer> getParticipants()
 	{
 		return this.participants;

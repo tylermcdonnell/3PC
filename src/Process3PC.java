@@ -1135,8 +1135,14 @@ public class Process3PC implements Runnable {
 		transaction.acks.add(action.senderID);
 		
 		// TODO: Mike changed the statement below.
-		//if (transaction.acks.size() == transaction.expectedAcks)
-		if (transaction.acks.size() == (this.monitor.getNonFailedProcesses().size() - 1))
+		// TYLER: I'm skeptical this is necessary. Note that in the COMMITTABLE state,
+		// in handle(), the coordinator can receive TIMEOUTs and proceeds even if all
+		// of these ACKs are not received, so it should never get stuck. I couldn't 
+		// reproduce the scenario you mentioned. I changed it back for now because I
+		// did notice that there are other bugs that getNonFailedProcesses seems to be
+		// causing (index out-of-bounds, etc.).
+		//if (transaction.acks.size() == (this.monitor.getNonFailedProcesses().size() - 1))
+		if (transaction.acks.size() == transaction.expectedAcks)
 		{
 			commit(transaction);
 			sendCommit(transaction.id, transaction.acks, action.playlistAction);

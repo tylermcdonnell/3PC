@@ -6,6 +6,13 @@ import playlist.PlaylistAction;
 
 public class Action implements Serializable {
 
+	@Override
+	public String toString() {
+		return "Action [senderID=" + senderID + ", destinationID=" + destinationID + ", transactionID=" + transactionID
+				+ ", playlistAction=" + playlistAction + "]";
+	}
+
+
 	private static final long serialVersionUID = 1L;
 
 	// Who is sending this action.
