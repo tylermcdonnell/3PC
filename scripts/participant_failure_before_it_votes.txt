@@ -13,6 +13,6 @@ add Goodbye_Time youtube.com/GT
 // Wait two seconds to simulate user typing.
 s 2
 
-// Revive p_1. It will have to find out what the others said.
-// It should decide ABORT, just as the others did.
+// Revive p_1. It will not know there was a transaction,
+// so should not talk to anyone, just revive and chill.
 revive 1
