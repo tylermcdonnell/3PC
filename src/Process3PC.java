@@ -1139,7 +1139,7 @@ public class Process3PC implements Runnable {
 		if (transaction.acks.size() >= (this.monitor.getNonFailedProcesses().size() - 1))
 		{
 			commit(transaction);
-			sendCommit(transaction.id, transaction.acks, action.playlistAction);
+			sendCommit(transaction.id, getListOfAllProcesses(this.id), action.playlistAction);
 		}
 	}
 	
