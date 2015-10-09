@@ -1,7 +1,7 @@
 README - P1
 
 Mike Feilbach (mfeilbach@utexas.edu), mjf2628
-Tyler Mcdonnel (EMAIL), UTEID                   **************** TYLER PLS FILL IN *****************
+Tyler Mcdonnel (tyler@cs.utexas.edu), tsm563
 University of Texas at Austin
 CS 380D -- Distributed Computing I
 Professor Lorenzo Alvisi
@@ -55,11 +55,7 @@ kill <processID>      - Kill the process with the given ID.
 
 killAll               - Kill all processes.
 
---killLeader
-
 revive <processID>    - Revive the process corresponding to the given processID.
-
---reviveLast
 
 reviveAll             - Revive all processes.
 
@@ -68,8 +64,6 @@ pm <processID> <numMessages>    - "Have specified process send only the number
                                    
 rm <processID>        - "If a process' messaging has been paused, then resume
                         sending messages as normal."
-                        
---allClear
 
 rejectNextChange <process>  - "Specified process should vote no for the next update
                               suggested by the coordinator."
