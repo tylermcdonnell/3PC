@@ -1,3 +1,6 @@
+// COMMAND BELOW:
+// script scripts/partial_commit.txt
+
 cp 3
 // stop coordinator after it sends a COMMIT message to subset of participants
 pm 0 5
