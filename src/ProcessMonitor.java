@@ -168,4 +168,12 @@ public class ProcessMonitor {
 		}
 		return dead;
 	}
+	
+	/**
+	 * It will take this long after instantiation for values to stabilize.
+	 */
+	public long getStartupDelay()
+	{
+		return this.timeout * 2;
+	}
 }

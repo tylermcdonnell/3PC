@@ -164,6 +164,7 @@ public class Launcher {
 		else if (command.equals(REVIVE_ALL_CMD)) 
 		{
 			System.out.println("Reviving all processes.");
+			reviveAll();
 		} 
 		else if (command.equals(PARTIAL_MESSAGE_CMD)) 
 		{
@@ -304,6 +305,13 @@ public class Launcher {
 
 		threads.set(id, d);
 		processes.set(id, r);
+	}
+	
+	private static void reviveAll()
+	{
+		for (int i = 0; i < threads.size(); i++) {
+			revive(i);
+		}
 	}
 
 	/**

@@ -94,6 +94,14 @@ public class Process3PC implements Runnable {
 		// The list of termination participants who responded Uncertain
 		Collection<Integer> terminationUncertain;
 		
+		// After a process recovers from failure, it can go ahead and 
+		// attempt to initiate an election protocol if all of the processes
+		// in its UP set are alive. If they are already involved in a 
+		// termination protocol, they should ignore it.
+		boolean readyToRecoverFromTotalFailure;
+		// Hacky mechanism to let us know when monitor is accurate.
+		long monitorUp;
+		
 		Transaction(Integer transactionId, Role role, State state, PlaylistAction action)
 		{
 			this.id 			= transactionId;
@@ -115,6 +123,9 @@ public class Process3PC implements Runnable {
 			this.terminationParticipants  	= new ArrayList<Integer>();
 			this.terminationCommittable   	= new ArrayList<Integer>();
 			this.terminationUncertain     	= new ArrayList<Integer>();
+			
+			this.readyToRecoverFromTotalFailure = false;
+			this.monitorUp = 0;
 		}
 	}
 	
@@ -368,6 +379,10 @@ public class Process3PC implements Runnable {
 			{
 				this.transactions.put(a.transactionID, new Transaction(a.transactionID, Role.Participant, State.Committed, a.playlistAction));
 				this.transactions.get(a.transactionID).committed = true;
+			} 
+			if (a instanceof UP)
+			{
+				this.transactions.get(a.transactionID).UP = ((UP) a).getUP();
 			}
 		}
 		
@@ -393,7 +408,13 @@ public class Process3PC implements Runnable {
 			{	
 				sendCommit(t.id, this.monitor.getLive(), t.playlistAction);
 			}
+			
+			// We can go ahead and prepare to recover from total failure in 
+			// case we do not get any useful feedback.
+			t.readyToRecoverFromTotalFailure = true;
+			t.monitorUp = System.currentTimeMillis();
 		}
+		System.out.println("DONE");
 	}
 	
 	/**
@@ -402,7 +423,7 @@ public class Process3PC implements Runnable {
 	public void run()
 	{
 		while(true)
-		{
+		{		
 			// Receive all messages from the network and filter them into Keep-Alive and
 			// protocol queues.
 			receiveAll();
@@ -417,7 +438,7 @@ public class Process3PC implements Runnable {
 			
 			// A process is halted if and only if it is given a sendPartial command.
 			if (!this.halted)
-			{
+			{				
 				// Process all received messages.
 				synchronized(this.protocolRecvQueue)
 				{
@@ -429,11 +450,34 @@ public class Process3PC implements Runnable {
 					}
 				}
 
-				// Notify transactions waiting on dead processes.
 				for (Iterator<Map.Entry<Integer, Transaction>> ti = this.transactions.entrySet().iterator(); ti.hasNext();)
 				{
 					Map.Entry<Integer, Transaction> entry = ti.next();
 					Transaction t = entry.getValue();
+					
+					// Check for total failure recovery.
+					if(t.readyToRecoverFromTotalFailure && !t.aborted && !t.committed &&
+					   (System.currentTimeMillis() - t.monitorUp > this.monitor.getStartupDelay())) 
+						// TYLER: Hack to allow monitor to properly assess live status of processes.
+					{
+						boolean lastProcessToFailIsAlive = true;
+						for(int i = t.UP; i < this.numProcesses; i++)
+						{
+							if (!this.monitor.getLive().contains(i))
+							{
+								lastProcessToFailIsAlive = false;
+							}
+						}
+						if (lastProcessToFailIsAlive)
+						{
+							System.out.println("Running last process to fail logic.");
+							t.readyToRecoverFromTotalFailure = false;
+							electionProtocol(t);
+						}
+					}
+	
+					// Notify transactions waiting on dead processes.
+					
 					for (Iterator<Integer> pi = deadProcesses.iterator(); pi.hasNext();)
 					{
 						Integer deadProcess = pi.next();
@@ -457,10 +501,9 @@ public class Process3PC implements Runnable {
 	 * protocol queues. This allows us to maintain life monitoring while 
 	 * separately pausing the protocol for testing purposes.
 	 */
-	public void receiveAll()
+	private void receiveAll()
 	{
 		List<Action> received = network.getReceived();
-		
 		for (Iterator<Action> i = received.iterator(); i.hasNext();)
 		{
 			Action a = i.next();
@@ -471,7 +514,7 @@ public class Process3PC implements Runnable {
 			else
 			{
 				this.protocolRecvQueue.add(a);
-			}
+			}		
 		}
 	}
 	
