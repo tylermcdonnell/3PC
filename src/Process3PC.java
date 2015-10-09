@@ -1133,7 +1133,10 @@ public class Process3PC implements Runnable {
 	private void processAck(Ack action, Transaction transaction)
 	{
 		transaction.acks.add(action.senderID);
-		if (transaction.acks.size() == transaction.expectedAcks)
+		
+		// TODO: Mike changed the statement below.
+		//if (transaction.acks.size() == transaction.expectedAcks)
+		if (transaction.acks.size() == (this.monitor.getNonFailedProcesses().size() - 1))
 		{
 			commit(transaction);
 			sendCommit(transaction.id, transaction.acks, action.playlistAction);
