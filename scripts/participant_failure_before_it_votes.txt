@@ -1,0 +1,18 @@
+// COMMAND BELOW:
+// script scripts/participant_failure_before_it_votes.txt
+
+// Create three processes, p_0 is coordinator.
+cp 3
+
+// Kill p_1.
+kill 1
+
+// Kick off 3PC with a Playlist command.
+add Goodbye_Time youtube.com/GT
+
+// Wait two seconds to simulate user typing.
+s 2
+
+// Revive p_1. It will have to find out what the others said.
+// It should decide ABORT, just as the others did.
+revive 1
