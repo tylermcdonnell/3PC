@@ -25,6 +25,10 @@ public class ProcessMonitor {
 	
 	private NetController network;
 	
+	// TODO
+	// MIKE: Processes that have not failed yet in the protocol.
+	private ArrayList<Integer> nonFailedProcesses;
+	
 	// ID of this process.
 	private Integer processId;
 	
@@ -69,6 +73,15 @@ public class ProcessMonitor {
 		{
 			this.statuses.add(new ProcessStatus(true, time));
 			this.lastSent.add(time);
+		}
+		
+		// At the start of monitoring, assume all are alive. Once we
+		// find a process has died, take it's ID away from this list
+		// until the protocol terminates.
+		this.nonFailedProcesses = new ArrayList<Integer>();
+		for (int i = 0; i < this.numProcesses; i++)
+		{
+			this.nonFailedProcesses.add(i);
 		}
 	}
 	
@@ -128,6 +141,10 @@ public class ProcessMonitor {
 					System.out.println("Process " + this.processId + " believes process " + i + " is dead.");
 				}
 				this.statuses.get(i).live = false;
+				
+				// Take this process ID off our list of non-failed
+				// processes forever.
+				this.nonFailedProcesses.remove(i);
 			}
 		}
 		
@@ -167,6 +184,16 @@ public class ProcessMonitor {
 			}
 		}
 		return dead;
+	}
+	
+	
+	/**
+	 * @return the list of processes who have not failed during this run
+	 * of the protocol.
+	 */
+	public ArrayList<Integer> getNonFailedProcesses()
+	{
+		return this.nonFailedProcesses;
 	}
 	
 	/**
