@@ -1,0 +1,7 @@
+// COMMAND BELOW:
+// script scripts/participant_votes_no.txt
+
+cp 5
+rejectNextChange 3
+add Photograph youtube.com/P
+
