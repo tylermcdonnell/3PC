@@ -1,3 +1,6 @@
+// COMMAND BELOW:
+// script scripts/partial_precommit.txt
+
 cp 3
 // Have coordinator pause after sending 1 of the PRECOMMIT messages out
 pm 0 3
