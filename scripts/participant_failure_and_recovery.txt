@@ -1,30 +1,9 @@
-// script scripts/participant_failure_and_recovery.txt
-
-// Create three processes, p_0 is coordinator.
 cp 3
-
-// Kill p_1.
-kill 1
-
-// When 3PC starts, send VOTE-REQ to only p_1.
-//pm 0 1
-
-// Kick off 3PC with an add command.
+pm 0 2
 add Goodbye_Time youtube.com/GT
-
-// Wait two seconds.
-s 2
-
-// Send VOTE-REQ to p_2.
-pm 0 1
-
-// Resume message sending of coordinator.
+s 1
+kill 1
+pm 0 2
 rm 0
-
-//revive 1
-
-//rm 0
-
-//s 2
-
-//p
+revive 1
+rm 0
