@@ -53,6 +53,6 @@ public class Precommit extends Action implements Serializable {
 
 	@Override
 	public String toString() {
-		return "PRECOMMIT: " + this.message;
+		return "PRECOMMIT to process " + destinationID + " with message: " + this.message;
 	}
 }
