@@ -1,16 +1,28 @@
+// COMMAND BELOW:
+// script scripts/cascading_coordinator_failure.txt
+
 cp 3
+
 // Have first coordinator stop after sending VOTE-REQ
 pm 0 2
+
 add Careless_Whisper_(Seether_Cover) youtube.com/CWSC
+
 s 3
-// Have process 1 stop after sending STATE-REQ, which will
+
+// Have process 1 stop after sending both STATE-REQs, which will
 // happen once it is elected leader when we kill coordinator
-pm 1 2
+pm 1 3
+
 // Kill coordinator
 kill 0
+
 s 3
+
 // Kill new coordinator
 kill 1
+
 s 3
+
 revive 0
 revive 1
