@@ -173,6 +173,12 @@ public class Playlist implements Serializable {
 		    count++;
 		}
 		
+		// If no songs were listed, insert a newline.
+		if (count == 1)
+		{
+			System.out.println("");
+		}
+		
 		System.out.println("--------------------------------------------------------------------------------\n");
 	}
 }

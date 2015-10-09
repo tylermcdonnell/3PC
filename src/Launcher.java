@@ -50,6 +50,7 @@ public class Launcher {
 	private static final String USE_SCRIPT = "script";
 	private static final String TPC = "3pc";
 	private static final String PRINT_PLAYLISTS_CMD = "p";
+	private static final String PRINT_DT_LOGS_CMD = "pl";
 
 	// Number of processes we choose to create for this execution.
 	public static int numProcesses;
@@ -211,9 +212,14 @@ public class Launcher {
 			// No longer used.
 			System.out.println("No longer used. Please use Add, Edit, or Remove instead.");
 		} 
-		else if (command.equals(PRINT_PLAYLISTS_CMD)) {
+		else if (command.equals(PRINT_PLAYLISTS_CMD)) 
+		{
 			printPlaylists();
-		} 
+		}
+		else if (command.equals(PRINT_DT_LOGS_CMD)) 
+		{
+			printDtLogs();
+		}
 		else 
 		{
 			System.out.println("Unrecognized command. Closing all net controllers. Program terminating.");
@@ -411,7 +417,8 @@ public class Launcher {
 	 * 
 	 * @throws InterruptedException if interrupted while sleeping.
 	 */
-	private static void sleep(int numSeconds) throws InterruptedException {
+	private static void sleep(int numSeconds) throws InterruptedException 
+	{
 
 		// Note: sleep takes an argument in milliseconds.
 		Thread.sleep(numSeconds * 1000);
@@ -420,12 +427,25 @@ public class Launcher {
 	/**
 	 * Prints all process' Playlists in a nice format.
 	 */
-	private static void printPlaylists() {
-
+	private static void printPlaylists() 
+	{
 		// Print all Playlist logs to compare.
 		System.out.println("\n");
 		for (int i = 0; i < processes.size(); i++) {
 			processes.get(i).printPlaylist();
+		}
+	}
+	
+	
+	/**
+	 * Prints all process' DT Logs in a nice format.
+	 */
+	private static void printDtLogs()
+	{
+		System.out.println("\n");
+		for (int i = 0; i < processes.size(); i++)
+		{
+			processes.get(i).printDTLog();
 		}
 	}
 
@@ -442,11 +462,6 @@ public class Launcher {
 		action.add("SongURL");
 		PlaylistAction pa = new PlaylistAction(action);
 		processes.get(0).start(0, pa);
-	}
-	
-	private static void testPlaylistPrintScript()
-	{
-		
 	}
 
 	private static void testPlaylistPrint(Integer numProcesses) throws InterruptedException {

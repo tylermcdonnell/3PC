@@ -1307,4 +1307,22 @@ public class Process3PC implements Runnable {
 		System.out.println("process " + id + "'s Playlist:");
 		playlist.printPlaylist();
 	}
+	
+	
+	/**
+	 * Prints this process' DT Log from stable storage.
+	 */
+	public void printDTLog()
+	{
+		ArrayList<Action> dtLog = this.dtLog.read();
+		System.out.println("process " + id + "'s DT Log:");
+		System.out.println("--------------------------------------------------------------------------------");
+		
+		for (int i = 0; i < dtLog.size(); i++)
+		{
+			System.out.println(dtLog.get(i).toString());
+		}
+		
+		System.out.println("--------------------------------------------------------------------------------\n");
+	}
 }
