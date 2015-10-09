@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.logging.Level;
+import sun.misc.BASE64Decoder;
 
 import action.Action;
 
