@@ -140,7 +140,6 @@ public class Launcher {
 		} 
 		else if (command.equals(KILL_CMD)) 
 		{
-			System.out.println("Killing process " + parameters[0] + ".");
 			kill(Integer.valueOf(parameters[0]));
 		} 
 		else if (command.equals(KILL_ALL_CMD)) 
@@ -170,7 +169,7 @@ public class Launcher {
 			Integer process = Integer.valueOf(parameters[0]);
 			Integer messages = Integer.valueOf(parameters[1]);
 			processes.get(process).haltAfter(messages);
-			System.out.println("Process " + process + " will send " + messages + " messages then stop.");
+			System.out.println("Process " + process + " will send " + messages + " more message(s) then stop.");
 		} 
 		else if (command.equals(RESUME_MESSAGES_CMD)) 
 		{
