@@ -199,7 +199,7 @@ public class Launcher {
 		} 
 		else if (command.equals(SLEEP_CMD)) 
 		{
-			System.out.print("Sleeping for " + parameters[0] + " seconds.");
+			System.out.println("Sleeping for " + parameters[0] + " seconds.");
 			sleep(Integer.parseInt(parameters[0]));
 		} 
 		else if (command.equals(USE_SCRIPT)) 

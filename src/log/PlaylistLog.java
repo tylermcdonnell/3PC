@@ -38,8 +38,6 @@ public class PlaylistLog {
 		this.playlist = new Playlist();
 		this.file = new File(filename);
 		
-		System.out.println("CREATED FILE: " + this.file.toPath());
-		
 		if (reset)
 		{
 			try

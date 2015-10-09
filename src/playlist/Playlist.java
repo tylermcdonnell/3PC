@@ -161,7 +161,10 @@ public class Playlist implements Serializable {
 		}
 		
 		// Print last transaction ID.
-		System.out.println(this.transactionsCompleted.get(this.transactionsCompleted.size() - 1));
+		if (this.transactionsCompleted.size() > 0)
+		{
+			System.out.println(this.transactionsCompleted.get(this.transactionsCompleted.size() - 1));
+		}
 		
 		int count = 1;
 		
