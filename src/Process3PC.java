@@ -55,6 +55,7 @@ public class Process3PC implements Runnable {
 		
 		// Used to count ACKs
 		ArrayList<Integer> acks;
+		Integer expectedAcks;
 		
 		// This is used to assess timeouts from relevant individuals during a transaction.
 		ArrayList<Integer> waitingOn;
@@ -100,6 +101,7 @@ public class Process3PC implements Runnable {
 			this.state 			= state;		
 			this.yesCount 		= 0;
 			this.voteCount  	= 0;
+			this.expectedAcks 	= 0;
 			this.acks 			= new ArrayList<Integer>();
 			this.waitingOn  	= new ArrayList<Integer>();
 			
@@ -109,10 +111,10 @@ public class Process3PC implements Runnable {
 			this.UP 			= 0;
 			this.playlistAction = action;
 			
-			this.inTerminationProtocol = false;
-			this.terminationParticipants  = new ArrayList<Integer>();
-			this.terminationCommittable   = new ArrayList<Integer>();
-			this.terminationUncertain     = new ArrayList<Integer>();
+			this.inTerminationProtocol 		= false;
+			this.terminationParticipants  	= new ArrayList<Integer>();
+			this.terminationCommittable   	= new ArrayList<Integer>();
+			this.terminationUncertain     	= new ArrayList<Integer>();
 		}
 	}
 	
@@ -195,7 +197,7 @@ public class Process3PC implements Runnable {
 		this.protocolSendQueue		= new LinkedList<Action>();
 		this.recvKeepAlive			= new LinkedList<KeepAlive>();
 		this.transactions 			= new Hashtable<Integer, Transaction>();
-		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 1000, 250);
+		this.monitor				= new ProcessMonitor(this.id, numProcs, this.network, 1500, 250);
 		this.messageCount 			= 0;
 		this.haltCount    			= Integer.MAX_VALUE;
 		
@@ -549,13 +551,15 @@ public class Process3PC implements Runnable {
 		// set to reflect that they are the new coordinator.
 		if (action instanceof StateRequest)
 		{
-			System.out.println("Process " + this.id + " RECEIVED STATE REQUEST: " + action.senderID + " " + transaction.UP);
 			if (action.senderID >= transaction.UP)
 			{
 				System.out.println("Process " + this.id + " answering " + action.senderID);
-				transaction.role 	= Role.Participant;
 				transaction.UP 		= action.senderID;
 				respondToStateRequest((StateRequest)action, transaction);
+			}
+			if (action.senderID > transaction.UP)
+			{
+				transaction.role 	= Role.Participant;
 			}
 		}
 		
@@ -570,7 +574,8 @@ public class Process3PC implements Runnable {
 		// Begin termination protocol by sending STATE-REQ to all participants.
 		if (action instanceof YouAreElected && transaction.role == Role.Participant)
 		{
-			transaction.role 					= Role.Coordinator;
+			updateRole(transaction.id, Role.Coordinator);
+			transaction.UP = this.id;
 			transaction.inTerminationProtocol 	= true;
 			transaction.terminationParticipants = this.monitor.getLive();
 			sendStateRequests(transaction);
@@ -578,6 +583,8 @@ public class Process3PC implements Runnable {
 		
 		if (transaction.inTerminationProtocol)
 		{
+			// TR1: If some process is COMMITTED, the coordinator
+			// sends COMMIT to all participants.
 			if (action instanceof Commit)
 			{
 				commit(transaction);
@@ -585,6 +592,9 @@ public class Process3PC implements Runnable {
 				sendCommit(transaction.id, transaction.terminationParticipants, transaction.playlistAction);
 				return; // Termination protocol complete.
 			}
+			// TR2: If all processes that reported their state are
+			// UNCERTAIN, the coordinator decides ABORT and sends
+			// ABORT to all participants.
 			else if (action instanceof Abort)
 			{
 				abort(transaction);
@@ -592,28 +602,48 @@ public class Process3PC implements Runnable {
 				sendAbort(transaction, transaction.terminationParticipants);
 				return; // Termination protocol complete.
 			}
+			// Vote counting for TR3-4.
 			else if (action instanceof Committable)
 			{
 				transaction.terminationCommittable.add(action.senderID);
 			}
+			// Vote counting for TR3-4.
 			else if (action instanceof Uncertain)
 			{
 				transaction.terminationUncertain.add(action.senderID);
 			}
-			
-			// If all processes have responded, proceed.
-			if (transaction.terminationCommittable.size() + 
+			// Proceed if:
+			// (1) All termination participants have responded.
+			// OR
+			// (2) One of the participants has timed out.
+			if ((transaction.terminationCommittable.size() +   
 				transaction.terminationUncertain.size() ==
-				transaction.terminationParticipants.size())
+				transaction.terminationParticipants.size()) ||  // (1)
+				((action instanceof Timeout) && 				// (2)
+				(transaction.terminationParticipants.contains(action.senderID))))
 			{
-				// If at least one process is COMMITTABLE, send PRE-COMMIT and proceed with
-				// regular protocol.
+				// TR4: If at least one process is COMMITTABLE, the coordinator
+				// sends PRECOMMIT to all processes that reported UNCERTAIN and
+				// waits for acknowledgements from those processes. After timeout,
+				// regardless of whether it's received all of the ACKs, the 
+				// coordinator decides COMMIT and sends COMMIT to all processes.
 				if (transaction.terminationCommittable.size() > 0)
 				{
-					sendPrecommit(transaction);
+					sendPrecommit(transaction, transaction.terminationUncertain);
+					
+					// We are now waiting on ACKs from all participants.
+					// Note that this is separate from waiting for ACKs 
+					// in the non-termination case, because we need not
+					// receive ACKs from all termination participants to
+					// proceed.
+					transaction.waitingOn.addAll(transaction.terminationParticipants);
+					// Clear this list so that the next timeout doesn't trigger another PRECOMMIT.
+					transaction.terminationParticipants.clear();
+					return;
 				}
-				// If all processes are UNCERTAIN, decide ABORT and send to all participants.
-				else
+				// TR3: If all processes are UNCERTAIN, decide ABORT and send
+				// ABORT to all participants.
+				else 
 				{
 					abort(transaction);
 					transaction.inTerminationProtocol = false;
@@ -680,6 +710,8 @@ public class Process3PC implements Runnable {
 		// If the process receiving the action has received PRECOMMIT, but no COMMIT or ABORT.
 		else if (transaction.state == State.Committable)
 		{
+			System.out.println(action);
+			System.out.println(transaction.role);
 			if (action instanceof Commit)
 			{
 				commit(transaction);
@@ -864,7 +896,7 @@ public class Process3PC implements Runnable {
 		// If all participants voted YES, PRECOMMIT and send PRECOMMIT to all.
 		if (transaction.yesCount == this.numProcesses - 1)
 		{
-			sendPrecommit(transaction);
+			sendPrecommit(transaction, getListOfAllProcesses(this.id));
 			
 			// We are now waiting on ACKs from all participants.
 			transaction.waitingOn.addAll(getListOfAllProcesses(this.id));
@@ -885,17 +917,19 @@ public class Process3PC implements Runnable {
 
 	}
 	
-	private void sendPrecommit(Transaction t)
+	private void sendPrecommit(Transaction t, Collection<Integer> destinations)
 	{
 		updateState(t.id, State.Committable);
 		this.dtLog.log(new Precommit(t.id, this.id, this.id, "", t.playlistAction));
-		for(int i = 0; i < this.numProcesses; i++)
+		for (Iterator<Integer> i = destinations.iterator(); i.hasNext();)
 		{
-			if (i !=  this.id)
+			Integer destination = i.next();
+			if (destination !=  this.id)
 			{
-				send(new Precommit(t.id, this.id, i, "", t.playlistAction));
+				send(new Precommit(t.id, this.id, destination, "", t.playlistAction));
 			}
 		}
+		t.expectedAcks = destinations.size();
 	}
 	
 	/**
@@ -957,7 +991,8 @@ public class Process3PC implements Runnable {
 	private void processAck(Ack action, Transaction transaction)
 	{
 		transaction.acks.add(action.senderID);
-		if (transaction.acks.size() == this.numProcesses - 1)
+		System.out.println("Size of ACKS, expected " + transaction.acks.size() + " " + transaction.expectedAcks);
+		if (transaction.acks.size() == transaction.expectedAcks)
 		{
 			commit(transaction);
 			sendCommit(transaction.id, transaction.acks, action.playlistAction);
