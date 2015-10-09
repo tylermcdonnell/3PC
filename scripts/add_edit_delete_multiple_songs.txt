@@ -1,0 +1,12 @@
+// COMMAND BELOW:
+// script scripts/add_edit_delete_multiple_songs.txt
+
+cp 5
+add Photograph youtube.com/P
+add Golden youtube.com/G
+add TalkIsCheap youtube.com/TIC
+add GonnaKnowWeWereHere youtube.com/GKWWH
+remove Golden
+edit TalkIsCheap TalkIsCheap_EDITED youtube.com/TIC_EDITED
+s 4
+p

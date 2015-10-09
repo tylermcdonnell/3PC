@@ -1,3 +1,6 @@
+// COMMAND BELOW:
+// script scripts/test_playlist_print.txt
+
 // Create four processes in the network.
 cp 4
 
