@@ -1,3 +1,6 @@
+// COMMAND BELOW:
+// script scripts/future_coordinator_failure.txt
+
 cp 4
 // Have coordinator pause after sending VOTE-REQ
 pm 0 2
