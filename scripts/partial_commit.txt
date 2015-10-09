@@ -1,7 +1,9 @@
 cp 3
+// stop coordinator after it sends a COMMIT message to subset of participants
 pm 0 5
 add Fearless youtube.com/F
 s 3
+// kill coordinator
 kill 0
-s 1
+s 3
 revive 0

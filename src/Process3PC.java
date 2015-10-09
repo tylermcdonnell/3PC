@@ -214,7 +214,6 @@ public class Process3PC implements Runnable {
 		
 		if (clearStableStorage == false)
 		{
-			System.out.println("Recovering...");
 			recover();
 		}
 	}
@@ -538,6 +537,9 @@ public class Process3PC implements Runnable {
 			Action a = i.next();
 			i.remove();
 			
+			System.out.println("Process " + this.id + " sending " + a);
+			
+			/*
 			if (a instanceof Start3PC)
 			{
 				System.out.println(a.transactionID + ": Process " + this.id + " sent VOTE-REQ to Process " + a.destinationID);
@@ -547,6 +549,7 @@ public class Process3PC implements Runnable {
 			{
 				System.out.println(a.transactionID + " Process " + this.id + " sent YES vote to Process " + a.destinationID);
 			}
+			*/
 			
 			this.network.sendMsg(a.destinationID, a);
 			this.messageCount += 1;
@@ -634,7 +637,6 @@ public class Process3PC implements Runnable {
 		{
 			if (action.senderID >= transaction.UP)
 			{
-				System.out.println("Process " + this.id + " answering " + action.senderID);
 				updateUPSet(transaction, action.senderID);
 				respondToStateRequest((StateRequest)action, transaction);
 			}
@@ -806,8 +808,6 @@ public class Process3PC implements Runnable {
 		// If the process receiving the action has received PRECOMMIT, but no COMMIT or ABORT.
 		else if (transaction.state == State.Committable)
 		{
-			System.out.println(action);
-			System.out.println(transaction.role);
 			if (action instanceof Commit)
 			{
 				commit(transaction);
