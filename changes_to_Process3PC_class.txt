@@ -1,0 +1,77 @@
+$$ (1) Add this to the top of the Transaction class.
+
+// The group of processes (their IDs) which vote YES.
+ArrayList<Integer> yesGroup;
+		
+		
+		
+		
+$$ (2) Add this to the Transaction constructor.
+this.yesGroup       = new ArrayList<Integer>();
+
+
+
+
+$$ (3) Add this to the top of recover()
+// Clear any messages sent to me that this process did not read 
+// before its death or got while it was dead (since net controller
+// was still alive technically).
+this.network.getReceivedMsgs();
+
+
+
+
+$$ (4) This handles the failure case I was talking about. Look at the
+$$ comments to understand the case. This goes directly above the
+$$ "HANDLING THESE ACTIONS IS STATE-DEPENDENT" comment in handle().
+
+// If we are coordinator, and we receive a timeout, and we have not
+// yet collected all votes.
+if (action instanceof Timeout && (transaction.role == Role.Coordinator) && (transaction.voteCount < this.numProcesses))
+{
+	System.out.println("A participant who has not voted timed out => ABORT is final decision.");
+			
+	// TODO (added a case)
+	// MIKE: Added the case below where a participant dies before receiving
+	// a VOTE-REQ. This participant will timeout. Here, we are notified
+	// of the timeout. The following coordinator code explains the necessary
+	// action:
+	//
+	// (3) wait for vote messages (YES or NO) from all participants
+	// (4)   on timeout begin
+	// (5)       let P_Y be the processes from which YES was received
+	// (6)       write abort record in DT log
+	// (7)       send ABORT to all processes in P_Y
+	// (8)       return
+	// (9)   end;
+	
+	// Step 5:
+	ArrayList<Integer> P_Y = transaction.yesGroup;
+	
+	// Step 6:
+	//this.dtLog.log(new Abort(transaction.id, this.id, this.id, action.playlistAction));
+	abort(transaction);
+	
+	// Step 7:
+	for (int i = 0; i < P_Y.size(); i++)
+	{
+		send(new Abort(transaction.id, this.id, P_Y.get(i), action.playlistAction));
+	}
+	
+	// Step 8:
+	return;
+}		
+		
+
+$$ (5) Add the line "transaction.yesGroup.add(action.senderID); to the code
+$$ in countVote(...)
+
+if (vote == Decide.Yes)
+{
+	transaction.yesCount += 1;
+	transaction.yesGroup.add(action.senderID);
+}
+
+
+
+$$ (6) 
