@@ -1,0 +1,16 @@
+cp 3
+pm 0 4
+add Forever_And_Always youtube.com/FAA
+s 3
+/ don't let other participants complete transaction before dying
+pm 1 1
+pm 2 1
+/ let coordinator commit but don't let commits be sent out
+kill 0
+s 3
+kill 1
+kill 2
+revive 1
+revive 2
+s 10
+revive 0

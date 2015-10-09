@@ -278,6 +278,10 @@ public class Process3PC implements Runnable {
 	 */
 	private void recover()
 	{
+		// Flush message queue. This clears messages sent to the process while
+		// it was dead since the NetController was never destroyed.
+		this.network.getReceivedMsgs();
+		
 		ArrayList<Action> history = this.dtLog.read();
 		
 		//**********************************************************************
@@ -382,7 +386,7 @@ public class Process3PC implements Runnable {
 			} 
 			if (a instanceof UP)
 			{
-				this.transactions.get(a.transactionID).UP = ((UP) a).getUP();
+				updateUPSet(this.transactions.get(a.transactionID), ((UP) a).getUP());
 			}
 		}
 		
@@ -414,7 +418,6 @@ public class Process3PC implements Runnable {
 			t.readyToRecoverFromTotalFailure = true;
 			t.monitorUp = System.currentTimeMillis();
 		}
-		System.out.println("DONE");
 	}
 	
 	/**
@@ -619,7 +622,7 @@ public class Process3PC implements Runnable {
 		// Coordinator timed out; carry out election protocol.
 		if (action instanceof Timeout && action.senderID == transaction.UP)
 		{
-			transaction.UP += 1;
+			updateUPSet(transaction, transaction.UP + 1);
 			electionProtocol(transaction);
 		}
 		
@@ -632,7 +635,7 @@ public class Process3PC implements Runnable {
 			if (action.senderID >= transaction.UP)
 			{
 				System.out.println("Process " + this.id + " answering " + action.senderID);
-				transaction.UP 		= action.senderID;
+				updateUPSet(transaction, action.senderID);
 				respondToStateRequest((StateRequest)action, transaction);
 			}
 			if (action.senderID > transaction.UP)
@@ -653,9 +656,10 @@ public class Process3PC implements Runnable {
 		if (action instanceof YouAreElected && transaction.role == Role.Participant)
 		{
 			updateRole(transaction.id, Role.Coordinator);
-			transaction.UP = this.id;
+			updateUPSet(transaction, this.id);
 			transaction.inTerminationProtocol 	= true;
 			transaction.terminationParticipants = this.monitor.getLive();
+			System.out.println("Termination Participants: " + transaction.terminationParticipants);
 			sendStateRequests(transaction);
 		}
 		
@@ -707,7 +711,15 @@ public class Process3PC implements Runnable {
 				// coordinator decides COMMIT and sends COMMIT to all processes.
 				if (transaction.terminationCommittable.size() > 0)
 				{
-					sendPrecommit(transaction, transaction.terminationUncertain);
+					if(transaction.terminationUncertain.size() > 0)
+					{
+						sendPrecommit(transaction, transaction.terminationUncertain);
+					}
+					else
+					{
+						commit(transaction);
+						sendCommit(transaction.id, getListOfAllProcesses(this.id), transaction.playlistAction);
+					}
 					
 					// We are now waiting on ACKs from all participants.
 					// Note that this is separate from waiting for ACKs 
@@ -762,6 +774,12 @@ public class Process3PC implements Runnable {
 			else if (action instanceof Abort && transaction.role == Role.Coordinator)
 			{
 				countVote(transaction, Decide.No, action);
+			}
+			
+			else if (action instanceof Timeout && transaction.role == Role.Coordinator)
+			{
+				abort(transaction);
+				sendAbort(transaction, getListOfAllProcesses(this.id));
 			}
 			
 			// We are a participant receiving VOTE-REQ.
@@ -871,6 +889,15 @@ public class Process3PC implements Runnable {
 		{
 			System.out.println("ERROR: while updating state. This should never happen.");
 		}
+	}
+	
+	/**
+	 * Changes the UP set. This writes to the DT log.
+	 */
+	private void updateUPSet(Transaction t, Integer newUp)
+	{
+		t.UP = newUp;
+		this.dtLog.log(new UP(t.id, this.id, this.id, t.playlistAction, t.UP));
 	}
 	
 	/**
@@ -1106,7 +1133,6 @@ public class Process3PC implements Runnable {
 	private void processAck(Ack action, Transaction transaction)
 	{
 		transaction.acks.add(action.senderID);
-		System.out.println("Size of ACKS, expected " + transaction.acks.size() + " " + transaction.expectedAcks);
 		if (transaction.acks.size() == transaction.expectedAcks)
 		{
 			commit(transaction);

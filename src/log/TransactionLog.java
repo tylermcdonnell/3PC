@@ -68,14 +68,26 @@ public class TransactionLog {
 		saveToDisk();
 	}
 	
-
 	/**
 	 * Returns the current transaction log.
 	 * @return
 	 */
-	public ArrayList<Action> read()
+	public synchronized ArrayList<Action> read()
 	{
-		return this.log;
+		return getLogCopy();
+	}
+	
+	private ArrayList<Action> getLogCopy()
+	{
+		synchronized(this.log)
+		{
+			ArrayList<Action> logCopy = new ArrayList<Action>(this.log.size());
+			for(Action item: this.log)
+			{
+				logCopy.add(item);
+			}
+			return logCopy;
+		}
 	}
 	
 	/**
@@ -85,7 +97,10 @@ public class TransactionLog {
 	 */
 	public boolean log(Action action)
 	{
-		log.add(action);
+		synchronized(this.log)
+		{
+			this.log.add(action);
+		}
 		return saveToDisk();
 	}
 	
@@ -99,7 +114,10 @@ public class TransactionLog {
 		{
 			FileOutputStream streamOut 	 = new FileOutputStream(this.file);
 			ObjectOutputStream objectOut = new ObjectOutputStream(streamOut);
-			objectOut.writeObject(this.log);
+			synchronized(this.log)
+			{
+				objectOut.writeObject(this.log);
+			}
 			objectOut.close();
 			streamOut.close();
 			return true;
@@ -123,7 +141,10 @@ public class TransactionLog {
 		{
 			FileInputStream streamIn 	= new FileInputStream(this.file);
 			ObjectInputStream objectIn 	= new ObjectInputStream(streamIn);
-			this.log 					= (ArrayList<Action>)objectIn.readObject();
+			synchronized(this.log)
+			{
+				this.log = (ArrayList<Action>)objectIn.readObject();	
+			}
 			objectIn.close();
 			streamIn.close();
 			return true;

@@ -2,8 +2,12 @@ cp 3
 pm 0 2
 add Forever_And_Always youtube.com/FAA
 s 3
+/ total failure
 killAll
 revive 0
 revive 1
+/ wait and show that no process makes progress
+/ until last process to fail recovers
 s 3
+/ last process to fail recovers
 revive 2

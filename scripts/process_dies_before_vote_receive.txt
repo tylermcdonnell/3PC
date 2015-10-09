@@ -1,0 +1,5 @@
+cp 3
+kill 1
+add Forever_And_Always youtube.com/FAA
+s 3
+revive 1
